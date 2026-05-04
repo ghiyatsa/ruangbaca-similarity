@@ -1,0 +1,65 @@
+services:
+  similarity-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        MODEL_NAME: paraphrase-multilingual-MiniLM-L12-v2
+    container_name: skripsi-similarity-api
+    restart: unless-stopped
+    ports:
+      - "8181:8181"
+
+    environment:
+      # ── Database (SQLite — path ke volume persistent) ──────────────────────
+      DATABASE_URL: "sqlite+aiosqlite:////data/skripsi.db"
+      # ── ChromaDB ──────────────────────────────────────────────────────────
+      CHROMA_DB_PATH: "/data/chroma_db"
+      COLLECTION_NAME: "skripsi_embeddings"
+      # ── Model (offline — model sudah di-bake ke image, tidak didownload ulang) ──
+      MODEL_NAME: "paraphrase-multilingual-MiniLM-L12-v2"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      # ── CORS — pisahkan domain dengan koma jika lebih dari satu ───────────
+      ALLOWED_ORIGINS: "http://localhost:8000"
+      # ── Concurrency ───────────────────────────────────────────────────────
+      OMP_NUM_THREADS: "2"
+      INFERENCE_CONCURRENCY: "4"
+      # ── Logging ───────────────────────────────────────────────────────────
+      LOG_LEVEL: "INFO"
+      # ── Secret (WAJIB diisi, minimal 16 karakter) ─────────────────────────
+      # Salin nilai SYNC_SECRET dari file .env Anda ke sini, atau gunakan:
+      #   SYNC_SECRET: "${SYNC_SECRET}"  ← otomatis baca dari .env di host
+      SYNC_SECRET: "${SYNC_SECRET}"
+
+    volumes:
+      # Persistent storage untuk SQLite DB + ChromaDB vector store
+      - similarity_data:/data
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G    # MiniLM-L12 ~400MB + ChromaDB + overhead
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8181/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s   # beri waktu model loading saat cold start
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  similarity_data:
+    driver: local
