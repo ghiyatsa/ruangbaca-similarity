@@ -43,3 +43,19 @@ async def verify_sync_token(
         detail="Token sinkronisasi tidak valid atau tidak ditemukan.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    """
+    Validasi Bearer token yang dikirim Laravel.
+    Token harus cocok dengan SYNC_SECRET di .env.
+    Mengembalikan 401 jika token tidak ada atau tidak cocok.
+    """
+    if (
+        credentials is None
+        or credentials.scheme.lower() != "bearer"
+        or not secrets.compare_digest(credentials.credentials, settings.SYNC_SECRET)
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Token sinkronisasi tidak valid.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
