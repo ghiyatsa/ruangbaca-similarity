@@ -1,9 +1,9 @@
 """
-EmbeddingService — mengubah teks menjadi vector embedding.
+EmbeddingService - mengubah teks menjadi vector embedding.
 
 Perbaikan dari v1:
-- Ganti @alru_cache (tidak kompatibel dengan np.ndarray) → cachetools.LRUCache
-- Ganti asyncio.get_event_loop() → asyncio.get_running_loop() (Python 3.10+)
+- Ganti @alru_cache (tidak kompatibel dengan np.ndarray) -> cachetools.LRUCache
+- Ganti asyncio.get_event_loop() -> asyncio.get_running_loop() (Python 3.10+)
 - Tambah inference semaphore agar concurrent inference tidak menyebabkan OOM
 - Thread-safe cache dengan threading.Lock
 """
@@ -12,8 +12,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import platform
 import threading
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 import numpy as np
 from cachetools import LRUCache
@@ -26,9 +27,42 @@ logger = logging.getLogger(__name__)
 try:
     from optimum.onnxruntime import ORTModelForFeatureExtraction
     from transformers import AutoTokenizer
+
     HAS_OPTIMUM = True
 except ImportError:
     HAS_OPTIMUM = False
+
+
+def _first_existing_path(candidates: List[str]) -> Optional[str]:
+    """Kembalikan path lokal pertama yang benar-benar ada."""
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def _local_model_roots() -> List[str]:
+    return [
+        "./model",
+        "./model_cache/model",
+        "./model_cache/_st_cache",
+    ]
+
+
+def _onnx_file_candidates() -> List[str]:
+    machine = platform.machine().lower()
+    if "arm" in machine or "aarch" in machine:
+        return [
+            "onnx/model_qint8_arm64.onnx",
+            "model.onnx",
+        ]
+
+    return [
+        "onnx/model_quint8_avx2.onnx",
+        "onnx/model_qint8_avx512_vnni.onnx",
+        "onnx/model_qint8_avx512.onnx",
+        "model.onnx",
+    ]
 
 
 class EmbeddingService:
@@ -44,41 +78,63 @@ class EmbeddingService:
         self.is_onnx: bool = False
         self.is_loaded: bool = False
 
-        # Thread-safe LRU cache — ganti @alru_cache yang bermasalah dengan np.ndarray
+        # Thread-safe LRU cache - ganti @alru_cache yang bermasalah dengan np.ndarray
         self._cache: LRUCache[str, np.ndarray] = LRUCache(maxsize=1024)
         self._cache_lock = threading.Lock()
-
-    # ── Inisialisasi ─────────────────────────────────────────────────────────
 
     async def load_model(self) -> None:
         """Muat model secara async. Mencoba ONNX dulu, lalu fallback ke ST."""
         if self.is_loaded:
             return
 
-        onnx_path = "./models_onnx"
-        loop = asyncio.get_running_loop()  # Fix: get_event_loop() deprecated
+        loop = asyncio.get_running_loop()
 
-        if HAS_OPTIMUM and os.path.exists(onnx_path):
-            logger.info("Menggunakan model ONNX dari: %s", onnx_path)
-            try:
-                self.model = await loop.run_in_executor(
-                    None, lambda: ORTModelForFeatureExtraction.from_pretrained(onnx_path)
-                )
-                self.tokenizer = await loop.run_in_executor(
-                    None, lambda: AutoTokenizer.from_pretrained(onnx_path)
-                )
-                self.is_onnx = True
-                self.is_loaded = True
-                logger.info("Model ONNX berhasil dimuat.")
-                return
-            except Exception as exc:
-                logger.warning("Gagal memuat ONNX: %s — fallback ke SentenceTransformer.", exc)
+        if HAS_OPTIMUM:
+            for model_root in _local_model_roots():
+                if not os.path.exists(model_root):
+                    continue
+
+                for onnx_file in _onnx_file_candidates():
+                    onnx_full_path = os.path.join(model_root, onnx_file)
+                    if not os.path.exists(onnx_full_path):
+                        continue
+
+                    logger.info(
+                        "Menggunakan model ONNX dari: %s (%s)",
+                        model_root,
+                        onnx_file,
+                    )
+                    try:
+                        self.model = await loop.run_in_executor(
+                            None,
+                            lambda root=model_root, file_name=onnx_file: (
+                                ORTModelForFeatureExtraction.from_pretrained(
+                                    root,
+                                    file_name=file_name,
+                                )
+                            ),
+                        )
+                        self.tokenizer = await loop.run_in_executor(
+                            None,
+                            lambda root=model_root: AutoTokenizer.from_pretrained(root),
+                        )
+                        self.is_onnx = True
+                        self.is_loaded = True
+                        logger.info("Model ONNX berhasil dimuat.")
+                        return
+                    except Exception as exc:
+                        logger.warning(
+                            "Gagal memuat ONNX dari %s (%s): %s",
+                            model_root,
+                            onnx_file,
+                            exc,
+                        )
 
         # Fallback ke SentenceTransformer
         from sentence_transformers import SentenceTransformer
-        
-        local_model_path = "./model"
-        if os.path.exists(local_model_path):
+
+        local_model_path = _first_existing_path(_local_model_roots())
+        if local_model_path:
             logger.info("Menggunakan model lokal (baked-in) dari: %s", local_model_path)
             load_path = local_model_path
         else:
@@ -92,8 +148,6 @@ class EmbeddingService:
         self.is_onnx = False
         self.is_loaded = True
         logger.info("Model SentenceTransformer berhasil dimuat.")
-
-    # ── Text builder ─────────────────────────────────────────────────────────
 
     @staticmethod
     def build_index_text(
@@ -111,8 +165,6 @@ class EmbeddingService:
     @staticmethod
     def build_query_text(judul: str) -> str:
         return judul.strip()
-
-    # ── Public encode API ────────────────────────────────────────────────────
 
     async def encode_for_index(
         self,
@@ -137,19 +189,15 @@ class EmbeddingService:
         texts = [self.build_index_text(j, a, k) for j, a, k in items]
         return await self._encode_batch(texts)
 
-    # ── Private encoding primitives ──────────────────────────────────────────
-
     async def _encode_single(self, text: str) -> np.ndarray:
         """Encode satu teks dengan cache + semaphore."""
-        # Cache check (tanpa semaphore — cepat)
         with self._cache_lock:
             if text in self._cache:
                 return self._cache[text]
 
-        # Ambil semaphore sebelum inferensi CPU-heavy
         from app.core.limiter import get_inference_semaphore
+
         async with get_inference_semaphore():
-            # Double-check setelah acquire (thread lain mungkin sudah encode)
             with self._cache_lock:
                 if text in self._cache:
                     return self._cache[text]
@@ -157,11 +205,13 @@ class EmbeddingService:
             loop = asyncio.get_running_loop()
             if self.is_onnx:
                 result = await loop.run_in_executor(
-                    None, lambda: self._onnx_encode([text])[0]
+                    None,
+                    lambda: self._onnx_encode([text])[0],
                 )
             else:
                 result = await loop.run_in_executor(
-                    None, lambda: self.model.encode(text, normalize_embeddings=True)
+                    None,
+                    lambda: self.model.encode(text, normalize_embeddings=True),
                 )
 
         with self._cache_lock:
@@ -169,26 +219,32 @@ class EmbeddingService:
         return result
 
     async def _encode_batch(self, texts: List[str]) -> np.ndarray:
-        """Encode batch teks — semaphore diterapkan, tanpa cache individual."""
+        """Encode batch teks - semaphore diterapkan, tanpa cache individual."""
         from app.core.limiter import get_inference_semaphore
+
         async with get_inference_semaphore():
             loop = asyncio.get_running_loop()
             if self.is_onnx:
                 return await loop.run_in_executor(
-                    None, lambda: self._onnx_encode(texts)
-                )
-            else:
-                return await loop.run_in_executor(
                     None,
-                    lambda: self.model.encode(
-                        texts, normalize_embeddings=True, batch_size=32
-                    ),
+                    lambda: self._onnx_encode(texts),
                 )
+            return await loop.run_in_executor(
+                None,
+                lambda: self.model.encode(
+                    texts,
+                    normalize_embeddings=True,
+                    batch_size=32,
+                ),
+            )
 
     def _onnx_encode(self, texts: List[str]) -> np.ndarray:
-        """Inferensi ONNX: Tokenize → Model → Mean Pooling → L2 Normalize."""
+        """Inferensi ONNX: Tokenize -> Model -> Mean Pooling -> L2 Normalize."""
         encoded_input = self.tokenizer(
-            texts, padding=True, truncation=True, return_tensors="pt"
+            texts,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
         )
         model_output = self.model(**encoded_input)
 
@@ -204,8 +260,6 @@ class EmbeddingService:
 
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings / norms
-
-    # ── Utility ──────────────────────────────────────────────────────────────
 
     def cosine_similarity(self, vec_a: np.ndarray, vec_b: np.ndarray) -> float:
         """Cosine similarity untuk dua vektor ternormalisasi (dot product)."""

@@ -3,6 +3,7 @@
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -20,9 +21,8 @@ chroma_db/
 skripsi.db
 skripsi.db-journal
 
-# Models
-model/
-models_onnx/
+# Model lokal tidak perlu ikut ke build Space
+model_cache/
 
 # Project
 .git/

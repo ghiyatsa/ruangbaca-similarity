@@ -4,55 +4,52 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-      args:
-        MODEL_NAME: paraphrase-multilingual-MiniLM-L12-v2
     container_name: skripsi-similarity-api
     restart: unless-stopped
     ports:
-      - "8181:8181"
+      - "8181:7860"
 
     environment:
-      # ── Database (SQLite — path ke volume persistent) ──────────────────────
+      PORT: "7860"
       DATABASE_URL: "sqlite+aiosqlite:////data/skripsi.db"
-      # ── ChromaDB ──────────────────────────────────────────────────────────
       CHROMA_DB_PATH: "/data/chroma_db"
       COLLECTION_NAME: "skripsi_embeddings"
-      # ── Model (offline — model sudah di-bake ke image, tidak didownload ulang) ──
       MODEL_NAME: "paraphrase-multilingual-MiniLM-L12-v2"
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
-      # ── CORS — pisahkan domain dengan koma jika lebih dari satu ───────────
+      HF_HOME: "/data/.huggingface"
       ALLOWED_ORIGINS: "http://localhost:8000"
-      # ── Concurrency ───────────────────────────────────────────────────────
-      OMP_NUM_THREADS: "2"
-      INFERENCE_CONCURRENCY: "4"
-      # ── Logging ───────────────────────────────────────────────────────────
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      INFERENCE_CONCURRENCY: "2"
       LOG_LEVEL: "INFO"
-      # ── Secret (WAJIB diisi, minimal 16 karakter) ─────────────────────────
-      # Salin nilai SYNC_SECRET dari file .env Anda ke sini, atau gunakan:
-      #   SYNC_SECRET: "${SYNC_SECRET}"  ← otomatis baca dari .env di host
       SYNC_SECRET: "${SYNC_SECRET}"
 
     volumes:
-      # Persistent storage untuk SQLite DB + ChromaDB vector store
       - similarity_data:/data
 
     deploy:
       resources:
         limits:
-          memory: 2G    # MiniLM-L12 ~400MB + ChromaDB + overhead
+          memory: 2G
           cpus: "2.0"
         reservations:
           memory: 512M
           cpus: "0.5"
 
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8181/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:7860/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s   # beri waktu model loading saat cold start
+      start_period: 90s
 
     logging:
       driver: "json-file"

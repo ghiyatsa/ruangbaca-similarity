@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Skripsi Similarity API"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
+    PORT: int = 8181
 
     # ── Database — SQLite only ─────────────────────────────────────────────────
     DATABASE_URL: str = "sqlite+aiosqlite:///./skripsi.db"
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
     COLLECTION_NAME: str = "skripsi_embeddings"
 
     # ── Sentence-Transformers model ─────────────────────────────────────────────
-    MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     ABSTRAK_MAX_CHARS: int = 300
 
     # ── CORS ────────────────────────────────────────────────────────────────────

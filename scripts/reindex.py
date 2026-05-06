@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 """
-reindex.py — Re-index ulang semua data dari SQLite ke ChromaDB.
+Re-index ulang semua data dari SQLite ke ChromaDB.
 
 Berguna saat:
-  - Mengganti model embedding (perlu rebuild semua vector)
-  - ChromaDB corrupt atau terhapus
-  - Migrasi ke server baru
+- Mengganti model embedding
+- ChromaDB corrupt atau terhapus
+- Migrasi ke server baru
 
 Cara kerja:
-  1. Ambil semua data dari endpoint GET /api/v1/skripsi (paginasi)
-  2. Kirim ulang ke endpoint POST /api/v1/sync/bulk-upsert
-  3. Semua data diasumsikan sudah memiliki laravel_id (masuk via Laravel sync)
-
-Penggunaan:
-  python scripts/reindex.py
-  python scripts/reindex.py --url http://localhost:8181 --token <SYNC_SECRET>
+1. Ambil semua data dari endpoint GET /api/v1/skripsi dengan paginasi.
+2. Kirim ulang ke endpoint POST /api/v1/sync/bulk-upsert.
+3. Semua data diasumsikan sudah memiliki skripsi_id dari sistem sumber.
 """
 import argparse
 import sys
@@ -24,27 +20,25 @@ import requests
 
 
 def reindex_all(api_url: str, token: str, batch_size: int = 100) -> None:
-    base    = api_url.rstrip("/")
+    base = api_url.rstrip("/")
     session = requests.Session()
     session.headers["Authorization"] = f"Bearer {token}"
 
-    # 1. Cek health
     try:
         health = session.get(f"{base}/health", timeout=5).json()
-        print(f"API online — total terindeks saat ini: {health.get('total_indexed', '?')}")
+        print(f"API online - total terindeks saat ini: {health.get('total_indexed', '?')}")
     except Exception as exc:
         print(f"Tidak bisa terhubung ke API: {exc}")
         sys.exit(1)
 
     print(f"Memulai re-indexing (batch_size={batch_size})...\n")
 
-    offset        = 0
-    batch_num     = 0
+    offset = 0
+    batch_num = 0
     total_success = 0
-    total_failed  = 0
+    total_failed = 0
 
     while True:
-        # 2. Ambil batch data dari SQLite via API
         try:
             resp = session.get(
                 f"{base}/api/v1/skripsi",
@@ -58,53 +52,53 @@ def reindex_all(api_url: str, token: str, batch_size: int = 100) -> None:
             break
 
         if not batch:
-            break  # Semua data sudah diproses
+            break
 
         batch_num += 1
         print(f"Batch {batch_num}: {len(batch)} item (offset {offset})")
 
-        # Filter hanya yang punya laravel_id (data dari Laravel)
-        with_laravel = [r for r in batch if r.get("laravel_id")]
-        skipped      = len(batch) - len(with_laravel)
+        with_source_id = [record for record in batch if record.get("skripsi_id")]
+        skipped = len(batch) - len(with_source_id)
         if skipped:
-            print(f"  Lewati {skipped} item tanpa laravel_id")
+            print(f"  Lewati {skipped} item tanpa skripsi_id")
 
-        if with_laravel:
+        if with_source_id:
             payload = [
                 {
-                    "laravel_id":    r["laravel_id"],
-                    "judul":         r["judul"],
-                    "abstrak":       r.get("abstrak"),
-                    "kata_kunci":    r.get("kata_kunci"),
-                    "tahun":         r.get("tahun"),
-                    "program_studi": r.get("program_studi"),
-                    "nim":           r.get("nim"),
-                    "nama_mahasiswa": r.get("nama_mahasiswa"),
+                    "skripsi_id": record["skripsi_id"],
+                    "judul": record["judul"],
+                    "abstrak": record.get("abstrak"),
+                    "kata_kunci": record.get("kata_kunci"),
+                    "tahun": record.get("tahun"),
+                    "program_studi": record.get("program_studi"),
+                    "nim": record.get("nim"),
+                    "nama_mahasiswa": record.get("nama_mahasiswa"),
                 }
-                for r in with_laravel
+                for record in with_source_id
             ]
+
             try:
                 res = session.post(
                     f"{base}/api/v1/sync/bulk-upsert",
                     json={"data": payload},
-                    timeout=30,  # 202 Accepted — tidak perlu tunggu lama
+                    timeout=30,
                 )
                 res.raise_for_status()
-                total_success += len(with_laravel)
-                print(f"  Batch {batch_num} diterima (202 Accepted — diproses di background)")
+                total_success += len(with_source_id)
+                print(f"  Batch {batch_num} diterima (202 Accepted - diproses di background)")
             except Exception as exc:
-                total_failed += len(with_laravel)
+                total_failed += len(with_source_id)
                 print(f"  Batch {batch_num} gagal: {exc}")
 
         offset += batch_size
-        time.sleep(0.5)  # jeda agar background task sempat memproses
+        time.sleep(0.5)
 
-    print(f"\n{'═' * 45}")
-    print(f"  Re-indexing selesai")
+    print(f"\n{'=' * 45}")
+    print("  Re-indexing selesai")
     print(f"  Berhasil dikirim : {total_success}")
     print(f"  Gagal            : {total_failed}")
-    print(f"{'═' * 45}")
-    print("Catatan: proses embedding berjalan di background API — cek /health untuk status.")
+    print(f"{'=' * 45}")
+    print("Catatan: proses embedding berjalan di background API - cek /health untuk status.")
 
 
 def main() -> None:
@@ -112,16 +106,20 @@ def main() -> None:
         description="Re-index ulang semua skripsi dari SQLite ke ChromaDB"
     )
     parser.add_argument(
-        "--url", default="http://localhost:8181",
-        help="URL API (default: http://localhost:8181)"
+        "--url",
+        default="http://localhost:8181",
+        help="URL API (default: http://localhost:8181)",
     )
     parser.add_argument(
-        "--token", required=True,
-        help="SYNC_SECRET dari .env untuk autentikasi"
+        "--token",
+        required=True,
+        help="SYNC_SECRET dari .env untuk autentikasi",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=100,
-        help="Jumlah item per batch (default: 100)"
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Jumlah item per batch (default: 100)",
     )
     args = parser.parse_args()
     reindex_all(args.url, args.token, args.batch_size)

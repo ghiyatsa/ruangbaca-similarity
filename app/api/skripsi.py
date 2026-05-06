@@ -77,7 +77,7 @@ async def get_skripsi(
     summary="Hapus skripsi dari database dan vector store",
     description=(
         "Hapus data skripsi berdasarkan ID internal. "
-        "Untuk hapus berdasarkan ID Laravel, gunakan endpoint `/sync/{laravel_id}`."
+        "Untuk hapus berdasarkan ID sumber/Laravel, gunakan endpoint `/sync/{skripsi_id}`."
     ),
 )
 async def hapus_skripsi(

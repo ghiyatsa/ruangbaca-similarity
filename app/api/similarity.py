@@ -1,10 +1,5 @@
 """
-Router: Deteksi Kemiripan Judul Skripsi
-========================================
-
-Rate limited: 10 cek/menit per IP (via SlowAPI).
-Input: judul saja — embedding query dibangun dari judul.
-Embedding database sudah mencakup judul + abstrak + kata kunci.
+Router: Deteksi Kemiripan Judul Skripsi.
 """
 from __future__ import annotations
 
@@ -29,18 +24,19 @@ router = APIRouter()
     response_model=SimilarityCheckResponse,
     summary="Cek kemiripan judul skripsi baru",
     description=(
-        "Menerima **judul saja**, lalu mencari skripsi yang mirip di database. "
-        "Embedding database sudah mencakup abstrak & kata kunci. "
-        "**Rate limit:** 10 request/menit per IP."
+        "Menerima judul saja, lalu mencari skripsi yang mirip di database. "
+        "Embedding database sudah mencakup abstrak dan kata kunci. "
+        "Rate limit: 10 request/menit per IP. "
+        "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
 )
 @limiter.limit("10/minute")
 async def check_similarity(
-    request: Request,  # harus parameter pertama agar SlowAPI bisa baca IP
+    request: Request,
     body: SimilarityCheckRequest,
 ) -> SimilarityCheckResponse:
     embedding_service = request.app.state.embedding_service
-    vector_store      = request.app.state.vector_store
+    vector_store = request.app.state.vector_store
 
     total = await vector_store.count()
     if total == 0:
@@ -50,24 +46,29 @@ async def check_similarity(
         )
 
     query_embedding = await embedding_service.encode_for_query(body.judul)
-    raw_results     = await vector_store.search(
+    raw_results = await vector_store.search(
         query_embedding=query_embedding,
         top_k=body.top_k,
     )
 
     results: list[SimilarResult] = []
-    for r in raw_results:
-        score = r["similarity_score"]
+    for result in raw_results:
+        score = result["similarity_score"]
         if score < body.threshold:
             continue
+
+        source_id = result.get("skripsi_id")
+        if source_id is None:
+            source_id = result.get("laravel_id")
+
         results.append(
             SimilarResult(
-                id=r["id"],
-                laravel_id=r.get("laravel_id") or None,
-                judul=r.get("judul", ""),
-                nama_mahasiswa=r.get("nama_mahasiswa") or None,
-                program_studi=r.get("program_studi") or None,
-                tahun=r.get("tahun") or None,
+                id=result["id"],
+                skripsi_id=source_id or None,
+                judul=result.get("judul", ""),
+                nama_mahasiswa=result.get("nama_mahasiswa") or None,
+                program_studi=result.get("program_studi") or None,
+                tahun=result.get("tahun") or None,
                 similarity_score=score,
                 similarity_persen=format_persen(score),
                 level=get_similarity_level(score),
@@ -77,13 +78,13 @@ async def check_similarity(
     peringatan: str | None = None
     if results and results[0].similarity_score >= 0.85:
         peringatan = (
-            f"⚠️ Ditemukan judul dengan kemiripan SANGAT TINGGI "
+            f"Ditemukan judul dengan kemiripan SANGAT TINGGI "
             f"({results[0].similarity_persen}). "
             "Pertimbangkan untuk merevisi judul atau topik penelitian Anda."
         )
 
     logger.info(
-        "Similarity check: '%s' → %d hasil (threshold=%.2f).",
+        "Similarity check: '%s' -> %d hasil (threshold=%.2f).",
         body.judul[:60],
         len(results),
         body.threshold,
@@ -99,7 +100,7 @@ async def check_similarity(
 @router.post(
     "/compare",
     summary="Bandingkan dua judul secara langsung",
-    description="Hitung cosine similarity antara dua judul skripsi (tanpa menyentuh database).",
+    description="Hitung cosine similarity antara dua judul skripsi tanpa menyentuh database.",
 )
 @limiter.limit("20/minute")
 async def compare_two(
@@ -114,9 +115,9 @@ async def compare_two(
     score = embedding_service.cosine_similarity(emb_a, emb_b)
 
     return {
-        "judul_a":           judul_a,
-        "judul_b":           judul_b,
-        "similarity_score":  round(score, 4),
+        "judul_a": judul_a,
+        "judul_b": judul_b,
+        "similarity_score": round(score, 4),
         "similarity_persen": format_persen(score),
-        "level":             get_similarity_level(score),
+        "level": get_similarity_level(score),
     }
