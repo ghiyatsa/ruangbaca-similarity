@@ -172,22 +172,99 @@ class EmbeddingService:
         abstrak: Optional[str] = None,
         kata_kunci: Optional[str] = None,
     ) -> np.ndarray:
+        """
+        Encode skripsi dengan membobotkan judul, abstrak, dan kata kunci.
+        Masing-masing bagian di-encode terpisah lalu dijumlahkan secara berbobot.
+        """
         if not self.is_loaded:
             await self.load_model()
-        text = self.build_index_text(judul, abstrak, kata_kunci)
-        return await self._encode_single(text)
+
+        # 1. Encode bagian-bagian
+        v_judul = await self._encode_single(judul.strip())
+        
+        combined_v = v_judul * settings.WEIGHT_JUDUL
+
+        if abstrak:
+            clean_abstrak = abstrak.strip()[: settings.ABSTRAK_MAX_CHARS]
+            if clean_abstrak:
+                v_abstrak = await self._encode_single(clean_abstrak)
+                combined_v += v_abstrak * settings.WEIGHT_ABSTRAK
+
+        if kata_kunci:
+            clean_kk = kata_kunci.strip()
+            if clean_kk:
+                v_kk = await self._encode_single(clean_kk)
+                combined_v += v_kk * settings.WEIGHT_KATA_KUNCI
+
+        # 2. Re-normalize (penting untuk cosine similarity via dot product)
+        norm = np.linalg.norm(combined_v)
+        if norm > 1e-9:
+            combined_v = combined_v / norm
+
+        return combined_v
 
     async def encode_for_query(self, judul: str) -> np.ndarray:
+        """Query selalu menggunakan judul saja."""
         if not self.is_loaded:
             await self.load_model()
-        text = self.build_query_text(judul)
-        return await self._encode_single(text)
+        return await self._encode_single(judul.strip())
 
     async def encode_batch_for_index(self, items: List[tuple]) -> np.ndarray:
+        """
+        Encode banyak skripsi sekaligus dengan pembobotan.
+        Efisiensi ditingkatkan dengan melakukan batch inference untuk semua bagian.
+        """
         if not self.is_loaded:
             await self.load_model()
-        texts = [self.build_index_text(j, a, k) for j, a, k in items]
-        return await self._encode_batch(texts)
+
+        # 1. Kumpulkan semua teks unik untuk di-encode (mengurangi redundansi)
+        # Format: [(judul, abstrak, kata_kunci), ...]
+        all_texts = []
+        mapping = [] # Untuk melacak index mana milik skripsi mana
+        
+        for i, (j, a, k) in enumerate(items):
+            # Kita simpan index untuk rekonstruksi nanti
+            idx_judul = len(all_texts)
+            all_texts.append(j.strip())
+            
+            idx_abstrak = -1
+            if a:
+                clean_a = a.strip()[: settings.ABSTRAK_MAX_CHARS]
+                if clean_a:
+                    idx_abstrak = len(all_texts)
+                    all_texts.append(clean_a)
+            
+            idx_kk = -1
+            if k:
+                clean_k = k.strip()
+                if clean_k:
+                    idx_kk = len(all_texts)
+                    all_texts.append(clean_k)
+            
+            mapping.append((idx_judul, idx_abstrak, idx_kk))
+
+        # 2. Batch encode semua teks
+        all_embeddings = await self._encode_batch(all_texts)
+
+        # 3. Rekonstruksi vektor berbobot
+        results = []
+        for idx_j, idx_a, idx_k in mapping:
+            v_combined = all_embeddings[idx_j] * settings.WEIGHT_JUDUL
+            
+            if idx_a != -1:
+                v_combined += all_embeddings[idx_a] * settings.WEIGHT_ABSTRAK
+            
+            if idx_k != -1:
+                v_combined += all_embeddings[idx_k] * settings.WEIGHT_KATA_KUNCI
+            
+            # Normalisasi
+            norm = np.linalg.norm(v_combined)
+            if norm > 1e-9:
+                v_combined = v_combined / norm
+            
+            results.append(v_combined)
+
+        return np.array(results)
 
     async def _encode_single(self, text: str) -> np.ndarray:
         """Encode satu teks dengan cache + semaphore."""

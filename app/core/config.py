@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     ABSTRAK_MAX_CHARS: int = 300
 
+    # ── Weighting Similarity ──────────────────────────────────────────────────
+    # Total bobot disarankan berjumlah 1.0
+    WEIGHT_JUDUL: float = 0.7
+    WEIGHT_ABSTRAK: float = 0.2
+    WEIGHT_KATA_KUNCI: float = 0.1
+
     # ── CORS ────────────────────────────────────────────────────────────────────
     # Gunakan str agar pydantic-settings tidak mencoba JSON-decode nilai dari .env.
     # Gunakan property `allowed_origins_list` untuk mendapat List[str].
