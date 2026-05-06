@@ -1,0 +1,15 @@
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+env/
+
+model_cache/
+chroma_db/
+skripsi.db
+skripsi.db-journal
+
+.idea/
+.vscode/
