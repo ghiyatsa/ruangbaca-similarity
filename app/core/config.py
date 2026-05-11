@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # ── Metadata ───────────────────────────────────────────────────────────────
     PROJECT_NAME: str = "Skripsi Similarity API"
-    VERSION: str = "2.0.0"
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     PORT: int = 8181
 
