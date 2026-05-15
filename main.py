@@ -103,13 +103,21 @@ async def root():
 @app.get("/health", tags=["Meta"])
 async def health_check():
     total = await vector_store.count()
+    from app.core.database import AsyncSessionLocal
+    from app.repositories.skripsi_repo import SkripsiRepository
+
+    async with AsyncSessionLocal() as db:
+        total_rows = await SkripsiRepository(db).count()
+
     cache = embedding_service.cache_info()
     return {
         "status": "healthy",
         "model_loaded": embedding_service.is_loaded,
         "model_name": settings.MODEL_NAME,
         "model_backend": "onnx" if embedding_service.is_onnx else "sentence-transformers",
+        "total_records": total_rows,
         "total_indexed": total,
+        "is_consistent": total_rows == total,
         "embedding_cache": cache,
     }
 

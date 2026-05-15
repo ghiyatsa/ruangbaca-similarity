@@ -131,6 +131,15 @@ class VectorStore:
         """Hapus embedding berdasarkan id."""
         await self._run(self.collection.delete, ids=[str(skripsi_id)])
 
+    async def reset(self) -> None:
+        """Hapus seluruh collection lalu buat ulang dengan konfigurasi yang sama."""
+        await self._run(self.client.delete_collection, settings.COLLECTION_NAME)
+        self.collection = self.client.get_or_create_collection(
+            name=settings.COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+        logger.info("VectorStore direset — collection '%s' kosong.", settings.COLLECTION_NAME)
+
     # ── Statistik ──────────────────────────────────────────────────────────────
 
     async def count(self) -> int:

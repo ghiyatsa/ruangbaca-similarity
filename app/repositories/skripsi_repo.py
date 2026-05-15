@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.skripsi import Skripsi
@@ -82,3 +82,10 @@ class SkripsiRepository:
         await self.db.execute(
             delete(Skripsi).where(Skripsi.skripsi_id == skripsi_id)
         )
+
+    async def clear_all(self) -> None:
+        await self.db.execute(delete(Skripsi))
+
+    async def count(self) -> int:
+        result = await self.db.execute(select(func.count()).select_from(Skripsi))
+        return int(result.scalar_one())

@@ -38,15 +38,26 @@ def _chunked(iterable, size: int):
         yield chunk
 
 
-def _serialize_items(items: List[SyncItem]) -> str:
+def _serialize_payload(items: List[SyncItem], reset_index: bool) -> str:
     return json.dumps(
-        [item.model_dump(mode="json", by_alias=True) for item in items],
+        {
+            "data": [item.model_dump(mode="json", by_alias=True) for item in items],
+            "reset_index": reset_index,
+        },
         ensure_ascii=False,
     )
 
 
-def _deserialize_items(payload_json: str) -> List[SyncItem]:
-    return [SyncItem.model_validate(item) for item in json.loads(payload_json)]
+def _deserialize_payload(payload_json: str) -> tuple[List[SyncItem], bool]:
+    payload = json.loads(payload_json)
+
+    if isinstance(payload, list):
+        return [SyncItem.model_validate(item) for item in payload], False
+
+    return [
+        SyncItem.model_validate(item)
+        for item in payload.get("data", [])
+    ], bool(payload.get("reset_index", False))
 
 
 async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
@@ -63,13 +74,23 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
             logger.warning("Bulk-upsert job tidak ditemukan: %s", job_id)
             return
 
-        items = _deserialize_items(job.payload_json)
+        items, reset_index = _deserialize_payload(job.payload_json)
         await job_repo.mark_processing(job)
         await db.commit()
 
     processed = 0
+    expected_total = len({item.skripsi_id for item in items})
 
     try:
+        if reset_index:
+            async with AsyncSessionLocal() as db:
+                skripsi_repo = SkripsiRepository(db)
+                await skripsi_repo.clear_all()
+                await db.commit()
+
+            await vector_store.reset()
+            logger.info("Bulk-upsert job %s menjalankan reset penuh sebelum reindex.", job_id)
+
         for chunk in _chunked(items, settings.BULK_SYNC_CHUNK_SIZE):
             async with AsyncSessionLocal() as db:
                 skripsi_repo = SkripsiRepository(db)
@@ -106,6 +127,17 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
                 if job is not None:
                     await job_repo.update_progress(job, processed)
                     await db.commit()
+
+        async with AsyncSessionLocal() as db:
+            total_rows = await SkripsiRepository(db).count()
+
+        total_indexed = await vector_store.count()
+
+        if total_rows != expected_total or total_indexed != expected_total:
+            raise RuntimeError(
+                "Jumlah data hasil reindex tidak konsisten "
+                f"(expected={expected_total}, sqlite={total_rows}, vector={total_indexed})."
+            )
 
         async with AsyncSessionLocal() as db:
             job_repo = SyncJobRepository(db)
@@ -203,7 +235,7 @@ async def bulk_upsert(
         raise HTTPException(status_code=400, detail="Data tidak boleh kosong.")
 
     job_id = str(uuid4())
-    payload_json = _serialize_items(body.data)
+    payload_json = _serialize_payload(body.data, body.reset_index)
     job_repo = SyncJobRepository(db)
     await job_repo.create(
         job_id=job_id,
@@ -213,7 +245,12 @@ async def bulk_upsert(
     await db.commit()
 
     asyncio.create_task(_run_bulk_upsert_job(request.app.state, job_id))
-    logger.info("Bulk-upsert diterima: job_id=%s total=%d", job_id, len(body.data))
+    logger.info(
+        "Bulk-upsert diterima: job_id=%s total=%d reset_index=%s",
+        job_id,
+        len(body.data),
+        body.reset_index,
+    )
 
     return BulkSyncResponse(
         message=f"Menerima {len(body.data)} item dan job sedang diproses.",

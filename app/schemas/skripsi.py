@@ -56,6 +56,7 @@ class BulkSyncRequest(BaseModel):
     """Payload bulk-sync dari perintah artisan `php artisan skripsi:sync`."""
 
     data: List[SyncItem]
+    reset_index: bool = False
 
 
 class SyncResponse(BaseModel):

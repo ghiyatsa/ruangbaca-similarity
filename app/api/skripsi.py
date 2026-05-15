@@ -94,6 +94,6 @@ async def hapus_skripsi(
 
     await repo.delete_by_id(skripsi_id)
     await db.commit()
-    await vector_store.delete(skripsi_id)
+    await vector_store.delete(skripsi.skripsi_id or skripsi_id)
 
     logger.info("Skripsi id=%d dihapus.", skripsi_id)
