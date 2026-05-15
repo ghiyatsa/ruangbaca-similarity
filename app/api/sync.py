@@ -133,10 +133,16 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
 
         total_indexed = await vector_store.count()
 
-        if total_rows != expected_total or total_indexed != expected_total:
+        if reset_index:
+            if total_rows != expected_total or total_indexed != expected_total:
+                raise RuntimeError(
+                    "Jumlah data hasil reindex tidak konsisten "
+                    f"(expected={expected_total}, sqlite={total_rows}, vector={total_indexed})."
+                )
+        elif total_rows != total_indexed:
             raise RuntimeError(
-                "Jumlah data hasil reindex tidak konsisten "
-                f"(expected={expected_total}, sqlite={total_rows}, vector={total_indexed})."
+                "Jumlah data SQLite dan vector store tidak konsisten "
+                f"(sqlite={total_rows}, vector={total_indexed})."
             )
 
         async with AsyncSessionLocal() as db:
