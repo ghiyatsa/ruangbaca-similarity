@@ -67,7 +67,11 @@ class SkripsiRepository:
             skripsi.nim = item.nim
             skripsi.nama_mahasiswa = item.nama_mahasiswa
         else:
-            skripsi = Skripsi(**item.model_dump())
+            skripsi = Skripsi(**item.model_dump(exclude={
+                "bobot_judul",
+                "bobot_abstrak",
+                "bobot_kata_kunci",
+            }))
             self.db.add(skripsi)
         return skripsi
 

@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.models import sync_job  # noqa: F401
 from app.models.skripsi import Base
 
 engine = create_async_engine(

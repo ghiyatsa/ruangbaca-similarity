@@ -166,11 +166,43 @@ class EmbeddingService:
     def build_query_text(judul: str) -> str:
         return judul.strip()
 
+    @staticmethod
+    def _resolve_weights(
+        bobot_judul: Optional[float] = None,
+        bobot_abstrak: Optional[float] = None,
+        bobot_kata_kunci: Optional[float] = None,
+    ) -> tuple[float, float, float]:
+        weights = [
+            settings.WEIGHT_JUDUL if bobot_judul is None else float(bobot_judul),
+            settings.WEIGHT_ABSTRAK if bobot_abstrak is None else float(bobot_abstrak),
+            settings.WEIGHT_KATA_KUNCI if bobot_kata_kunci is None else float(bobot_kata_kunci),
+        ]
+        weights = [max(weight, 0.0) for weight in weights]
+        total = sum(weights)
+
+        if total <= 1e-9:
+            defaults = [
+                max(float(settings.WEIGHT_JUDUL), 0.0),
+                max(float(settings.WEIGHT_ABSTRAK), 0.0),
+                max(float(settings.WEIGHT_KATA_KUNCI), 0.0),
+            ]
+            total = sum(defaults)
+
+            if total <= 1e-9:
+                return 1.0, 0.0, 0.0
+
+            return tuple(weight / total for weight in defaults)
+
+        return tuple(weight / total for weight in weights)
+
     async def encode_for_index(
         self,
         judul: str,
         abstrak: Optional[str] = None,
         kata_kunci: Optional[str] = None,
+        bobot_judul: Optional[float] = None,
+        bobot_abstrak: Optional[float] = None,
+        bobot_kata_kunci: Optional[float] = None,
     ) -> np.ndarray:
         """
         Encode skripsi dengan membobotkan judul, abstrak, dan kata kunci.
@@ -180,21 +212,26 @@ class EmbeddingService:
             await self.load_model()
 
         # 1. Encode bagian-bagian
+        weight_judul, weight_abstrak, weight_kata_kunci = self._resolve_weights(
+            bobot_judul=bobot_judul,
+            bobot_abstrak=bobot_abstrak,
+            bobot_kata_kunci=bobot_kata_kunci,
+        )
         v_judul = await self._encode_single(judul.strip())
-        
-        combined_v = v_judul * settings.WEIGHT_JUDUL
+
+        combined_v = v_judul * weight_judul
 
         if abstrak:
             clean_abstrak = abstrak.strip()[: settings.ABSTRAK_MAX_CHARS]
             if clean_abstrak:
                 v_abstrak = await self._encode_single(clean_abstrak)
-                combined_v += v_abstrak * settings.WEIGHT_ABSTRAK
+                combined_v += v_abstrak * weight_abstrak
 
         if kata_kunci:
             clean_kk = kata_kunci.strip()
             if clean_kk:
                 v_kk = await self._encode_single(clean_kk)
-                combined_v += v_kk * settings.WEIGHT_KATA_KUNCI
+                combined_v += v_kk * weight_kata_kunci
 
         # 2. Re-normalize (penting untuk cosine similarity via dot product)
         norm = np.linalg.norm(combined_v)
@@ -218,11 +255,11 @@ class EmbeddingService:
             await self.load_model()
 
         # 1. Kumpulkan semua teks unik untuk di-encode (mengurangi redundansi)
-        # Format: [(judul, abstrak, kata_kunci), ...]
+        # Format: [(judul, abstrak, kata_kunci, bobot_judul, bobot_abstrak, bobot_kata_kunci), ...]
         all_texts = []
         mapping = [] # Untuk melacak index mana milik skripsi mana
-        
-        for i, (j, a, k) in enumerate(items):
+
+        for j, a, k, weight_j, weight_a, weight_k in items:
             # Kita simpan index untuk rekonstruksi nanti
             idx_judul = len(all_texts)
             all_texts.append(j.strip())
@@ -241,22 +278,26 @@ class EmbeddingService:
                     idx_kk = len(all_texts)
                     all_texts.append(clean_k)
             
-            mapping.append((idx_judul, idx_abstrak, idx_kk))
+            mapping.append((idx_judul, idx_abstrak, idx_kk, *self._resolve_weights(
+                bobot_judul=weight_j,
+                bobot_abstrak=weight_a,
+                bobot_kata_kunci=weight_k,
+            )))
 
         # 2. Batch encode semua teks
         all_embeddings = await self._encode_batch(all_texts)
 
         # 3. Rekonstruksi vektor berbobot
         results = []
-        for idx_j, idx_a, idx_k in mapping:
-            v_combined = all_embeddings[idx_j] * settings.WEIGHT_JUDUL
-            
+        for idx_j, idx_a, idx_k, weight_j, weight_a, weight_k in mapping:
+            v_combined = all_embeddings[idx_j] * weight_j
+
             if idx_a != -1:
-                v_combined += all_embeddings[idx_a] * settings.WEIGHT_ABSTRAK
-            
+                v_combined += all_embeddings[idx_a] * weight_a
+
             if idx_k != -1:
-                v_combined += all_embeddings[idx_k] * settings.WEIGHT_KATA_KUNCI
-            
+                v_combined += all_embeddings[idx_k] * weight_k
+
             # Normalisasi
             norm = np.linalg.norm(v_combined)
             if norm > 1e-9:

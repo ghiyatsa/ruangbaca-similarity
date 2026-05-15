@@ -45,6 +45,9 @@ class SyncItem(BaseModel):
     program_studi: Optional[str] = None
     nim: Optional[str] = None
     nama_mahasiswa: Optional[str] = None
+    bobot_judul: Optional[float] = Field(None, ge=0)
+    bobot_abstrak: Optional[float] = Field(None, ge=0)
+    bobot_kata_kunci: Optional[float] = Field(None, ge=0)
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -65,6 +68,18 @@ class BulkSyncResponse(BaseModel):
     message: str
     status: str
     total_received: int
+    job_id: str
+
+
+class BulkSyncJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    total_received: int
+    total_processed: int
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
 
 class SimilarityCheckRequest(BaseModel):
