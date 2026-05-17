@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import verify_sync_token
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, get_db
-from app.repositories.skripsi_repo import SkripsiRepository
 from app.repositories.sync_job_repo import SyncJobRepository
 from app.schemas.skripsi import (
     BulkSyncJobStatusResponse,
@@ -83,40 +82,25 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
 
     try:
         if reset_index:
-            async with AsyncSessionLocal() as db:
-                skripsi_repo = SkripsiRepository(db)
-                await skripsi_repo.clear_all()
-                await db.commit()
-
             await vector_store.reset()
             logger.info("Bulk-upsert job %s menjalankan reset penuh sebelum reindex.", job_id)
 
         for chunk in _chunked(items, settings.BULK_SYNC_CHUNK_SIZE):
-            async with AsyncSessionLocal() as db:
-                skripsi_repo = SkripsiRepository(db)
-                saved_pairs: List[tuple[SyncItem, object]] = []
-
-                for item in chunk:
-                    skripsi = await skripsi_repo.upsert_from_sync(item)
-                    saved_pairs.append((item, skripsi))
-
-                await db.commit()
-
             items_for_encode = [
                 (
-                    record.judul,
-                    record.abstrak,
-                    record.kata_kunci,
+                    item.judul,
+                    item.abstrak,
+                    item.kata_kunci,
                     item.bobot_judul,
                     item.bobot_abstrak,
                     item.bobot_kata_kunci,
                 )
-                for item, record in saved_pairs
+                for item in chunk
             ]
             embeddings = await embedding_service.encode_batch_for_index(items_for_encode)
 
-            ids = [item.skripsi_id for item, _ in saved_pairs]
-            metadatas = [build_metadata(item) for item, _ in saved_pairs]
+            ids = [item.skripsi_id for item in chunk]
+            metadatas = [build_metadata(item) for item in chunk]
             await vector_store.upsert_batch(ids, embeddings, metadatas)
 
             processed += len(chunk)
@@ -128,21 +112,18 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
                     await job_repo.update_progress(job, processed)
                     await db.commit()
 
-        async with AsyncSessionLocal() as db:
-            total_rows = await SkripsiRepository(db).count()
-
         total_indexed = await vector_store.count()
 
         if reset_index:
-            if total_rows != expected_total or total_indexed != expected_total:
+            if total_indexed != expected_total:
                 raise RuntimeError(
-                    "Jumlah data hasil reindex tidak konsisten "
-                    f"(expected={expected_total}, sqlite={total_rows}, vector={total_indexed})."
+                    "Jumlah vector hasil reindex tidak konsisten "
+                    f"(expected={expected_total}, vector={total_indexed})."
                 )
-        elif total_rows != total_indexed:
+        elif total_indexed < expected_total:
             raise RuntimeError(
-                "Jumlah data SQLite dan vector store tidak konsisten "
-                f"(sqlite={total_rows}, vector={total_indexed})."
+                "Jumlah vector terindeks lebih kecil dari data yang diterima "
+                f"(received={expected_total}, vector={total_indexed})."
             )
 
         async with AsyncSessionLocal() as db:
@@ -181,6 +162,7 @@ async def resume_unfinished_jobs(app_state) -> None:
     summary="Upsert satu skripsi dari Laravel",
     description=(
         "Dipanggil oleh Laravel Observer saat skripsi dibuat atau diperbarui. "
+        "Endpoint ini tidak menyimpan data skripsi penuh ke database lokal; service hanya membuat embedding dan memperbarui vector store. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
     dependencies=[Depends(verify_sync_token)],
@@ -188,19 +170,15 @@ async def resume_unfinished_jobs(app_state) -> None:
 async def upsert_one(
     request: Request,
     body: SyncItem,
-    db: AsyncSession = Depends(get_db),
+    _db: AsyncSession = Depends(get_db),
 ) -> SyncResponse:
     embedding_service = request.app.state.embedding_service
     vector_store = request.app.state.vector_store
 
-    repo = SkripsiRepository(db)
-    skripsi = await repo.upsert_from_sync(body)
-    await db.commit()
-
     embedding = await embedding_service.encode_for_index(
-        judul=skripsi.judul,
-        abstrak=skripsi.abstrak,
-        kata_kunci=skripsi.kata_kunci,
+        judul=body.judul,
+        abstrak=body.abstrak,
+        kata_kunci=body.kata_kunci,
         bobot_judul=body.bobot_judul,
         bobot_abstrak=body.bobot_abstrak,
         bobot_kata_kunci=body.bobot_kata_kunci,
@@ -215,7 +193,6 @@ async def upsert_one(
     return SyncResponse(
         message="Skripsi berhasil di-upsert",
         skripsi_id=body.skripsi_id,
-        local_id=skripsi.id,
     )
 
 
@@ -226,7 +203,7 @@ async def upsert_one(
     summary="Bulk upsert skripsi dari Laravel (async)",
     description=(
         "Dipanggil oleh php artisan skripsi:sync. "
-        "Payload disimpan sebagai job persisten dan diproses async. "
+        "Payload disimpan sebagai job persisten lalu diproses async untuk membangun ulang atau memperbarui vector index. "
         "Gunakan endpoint status job untuk memantau hasil akhirnya. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
@@ -300,6 +277,7 @@ async def show_job_status(
     summary="Hapus skripsi berdasarkan skripsi_id sumber",
     description=(
         "Dipanggil oleh Laravel Observer saat skripsi dihapus. "
+        "Endpoint ini hanya menghapus embedding dari vector store berdasarkan ID sumber. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
     dependencies=[Depends(verify_sync_token)],
@@ -307,13 +285,10 @@ async def show_job_status(
 async def delete_by_skripsi_id(
     request: Request,
     skripsi_id: int,
-    db: AsyncSession = Depends(get_db),
+    _db: AsyncSession = Depends(get_db),
 ) -> None:
     vector_store = request.app.state.vector_store
 
-    repo = SkripsiRepository(db)
-    await repo.delete_by_source_id(skripsi_id)
-    await db.commit()
     await vector_store.delete(skripsi_id)
 
     logger.info("Skripsi skripsi_id=%d dihapus.", skripsi_id)

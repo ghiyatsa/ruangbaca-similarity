@@ -1,7 +1,6 @@
-# app/models/sync_job.py
 from sqlalchemy import Column, DateTime, Integer, String, Text, func
 
-from app.models.skripsi import Base
+from app.models.base import Base
 
 
 class SyncJob(Base):

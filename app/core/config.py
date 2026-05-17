@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     PORT: int = 8181
 
     # ── Database — SQLite only ─────────────────────────────────────────────────
+    # SQLite lokal dipakai untuk menyimpan status sync job.
     DATABASE_URL: str = "sqlite+aiosqlite:///./skripsi.db"
 
     # ── ChromaDB (vector store) ─────────────────────────────────────────────────

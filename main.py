@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import similarity, skripsi, sync
+from app.api import similarity, sync
 from app.api.deps import verify_sync_token
 from app.core.config import settings
 from app.core.database import init_db
@@ -51,8 +51,10 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description=(
         "API deteksi kemiripan judul skripsi menggunakan Sentence Transformers dan ChromaDB.\n\n"
-        "Pengguna cukup mengirimkan judul saja; sistem akan membandingkan dengan embedding "
-        "database yang sudah mencakup abstrak dan kata kunci."
+        "Arsitektur service ini adalah `vector_only`: data skripsi utama tetap berada di Laravel/MySQL, "
+        "sedangkan FastAPI ini hanya menangani embedding, vector index, dan semantic similarity search.\n\n"
+        "Gunakan endpoint `/api/v1/sync/*` untuk sinkronisasi dari Laravel dan `/api/v1/similarity/check` "
+        "untuk pencarian kemiripan berbasis judul."
     ),
     version=settings.VERSION,
     lifespan=lifespan,
@@ -79,18 +81,18 @@ app.include_router(
     dependencies=[Depends(verify_sync_token)],
 )
 app.include_router(
-    skripsi.router,
-    prefix=f"{settings.API_V1_STR}/skripsi",
-    tags=["Skripsi"],
-)
-app.include_router(
     sync.router,
     prefix=f"{settings.API_V1_STR}/sync",
     tags=["Sync (Laravel)"],
 )
 
 
-@app.get("/", tags=["Meta"])
+@app.get(
+    "/",
+    tags=["Meta"],
+    summary="Informasi service",
+    description="Endpoint ringkas untuk melihat nama service, versi, dan lokasi dokumentasi OpenAPI.",
+)
 async def root():
     return {
         "service": settings.PROJECT_NAME,
@@ -100,24 +102,25 @@ async def root():
     }
 
 
-@app.get("/health", tags=["Meta"])
+@app.get(
+    "/health",
+    tags=["Meta"],
+    summary="Health check service",
+    description=(
+        "Mengembalikan status service, model embedding yang aktif, mode penyimpanan (`vector_only`), "
+        "jumlah vector yang sudah terindeks, dan statistik cache embedding."
+    ),
+)
 async def health_check():
     total = await vector_store.count()
-    from app.core.database import AsyncSessionLocal
-    from app.repositories.skripsi_repo import SkripsiRepository
-
-    async with AsyncSessionLocal() as db:
-        total_rows = await SkripsiRepository(db).count()
-
     cache = embedding_service.cache_info()
     return {
         "status": "healthy",
         "model_loaded": embedding_service.is_loaded,
         "model_name": settings.MODEL_NAME,
         "model_backend": "onnx" if embedding_service.is_onnx else "sentence-transformers",
-        "total_records": total_rows,
+        "storage_mode": "vector_only",
         "total_indexed": total,
-        "is_consistent": total_rows == total,
         "embedding_cache": cache,
     }
 

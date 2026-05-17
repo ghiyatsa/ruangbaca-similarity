@@ -22,10 +22,11 @@ router = APIRouter()
 @router.post(
     "/check",
     response_model=SimilarityCheckResponse,
-    summary="Cek kemiripan judul skripsi baru",
+    summary="Cek kemiripan judul skripsi",
     description=(
-        "Menerima judul saja, lalu mencari skripsi yang mirip di database. "
-        "Embedding database sudah mencakup abstrak dan kata kunci. "
+        "Menerima judul saja lalu mencari skripsi yang paling mirip secara semantik. "
+        "Response hanya mengembalikan `id` sumber dan skor similarity agar Laravel tetap menjadi source of truth data skripsi. "
+        "Embedding dalam vector store dibangun dari judul, abstrak, dan kata kunci saat proses sinkronisasi. "
         "Rate limit: 10 request/menit per IP. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
@@ -57,18 +58,9 @@ async def check_similarity(
         if score < body.threshold:
             continue
 
-        source_id = result.get("skripsi_id")
-        if source_id is None:
-            source_id = result.get("laravel_id")
-
         results.append(
             SimilarResult(
-                id=result["id"],
-                skripsi_id=source_id or None,
-                judul=result.get("judul", ""),
-                nama_mahasiswa=result.get("nama_mahasiswa") or None,
-                program_studi=result.get("program_studi") or None,
-                tahun=result.get("tahun") or None,
+                id=result.get("skripsi_id", result["id"]),
                 similarity_score=score,
                 similarity_persen=format_persen(score),
                 level=get_similarity_level(score),
@@ -100,7 +92,10 @@ async def check_similarity(
 @router.post(
     "/compare",
     summary="Bandingkan dua judul secara langsung",
-    description="Hitung cosine similarity antara dua judul skripsi tanpa menyentuh database.",
+    description=(
+        "Hitung cosine similarity antara dua judul skripsi tanpa membaca vector store. "
+        "Endpoint ini berguna untuk evaluasi cepat atau debugging bobot/model."
+    ),
 )
 @limiter.limit("20/minute")
 async def compare_two(

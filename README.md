@@ -6,27 +6,22 @@ app_port: 7860
 
 # Skripsi Similarity API
 
-API deteksi kemiripan judul skripsi berbasis FastAPI, Sentence Transformers, dan ChromaDB. Repo ini sudah disiapkan untuk:
+API deteksi kemiripan judul skripsi berbasis FastAPI, Sentence Transformers, dan ChromaDB.
 
-- deployment Docker lokal
-- deployment ke Hugging Face Spaces
-- integrasi sinkronisasi data dari Laravel
+Repo ini sekarang memakai arsitektur `vector_only`:
+
+- Laravel/ruangbaca tetap menjadi source of truth data skripsi
+- FastAPI hanya menerima payload sinkronisasi, membuat embedding, dan menyimpan vector
+- SQLite lokal hanya dipakai untuk menyimpan status `sync_jobs`
+- Hasil similarity mengembalikan `id` sumber + skor, lalu detail data diambil lagi oleh Laravel
 
 ## Ringkasan Arsitektur
 
-- FastAPI melayani endpoint similarity, skripsi, dan sync.
-- SQLite menyimpan metadata skripsi.
-- ChromaDB menyimpan embedding untuk pencarian kemiripan.
-- Model embedding lokal dibundel ke image dan dipakai dalam mode offline.
-- Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan.
-
-## Perubahan Penting
-
-- Nama field publik untuk ID sumber sekarang adalah `skripsi_id`.
-- Payload lama yang masih mengirim `laravel_id` masih diterima sementara pada endpoint sync agar rollout Laravel tidak langsung putus.
-- Metadata hasil similarity sekarang mengembalikan `skripsi_id`.
-- Port internal container untuk Hugging Face Spaces adalah `7860`.
-- Port lokal lewat `docker compose` tetap diakses dari host pada `8181`.
+- FastAPI melayani endpoint similarity dan sync
+- MySQL di Laravel menyimpan data skripsi utama
+- ChromaDB menyimpan embedding untuk semantic similarity
+- Model embedding lokal dibundel ke image dan dipakai dalam mode offline
+- Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan
 
 ## Endpoint Utama
 
@@ -40,12 +35,6 @@ API deteksi kemiripan judul skripsi berbasis FastAPI, Sentence Transformers, dan
 - `POST /api/v1/similarity/check`
 - `POST /api/v1/similarity/compare`
 
-### Skripsi
-
-- `GET /api/v1/skripsi`
-- `GET /api/v1/skripsi/{id}`
-- `DELETE /api/v1/skripsi/{id}`
-
 ### Sync dari Laravel
 
 Semua endpoint sync wajib header:
@@ -56,6 +45,7 @@ Authorization: Bearer <SYNC_SECRET>
 
 - `POST /api/v1/sync/upsert`
 - `POST /api/v1/sync/bulk-upsert`
+- `GET /api/v1/sync/jobs/{job_id}`
 - `DELETE /api/v1/sync/{skripsi_id}`
 
 ## Contoh Payload Sync
@@ -83,6 +73,35 @@ Payload lama berikut masih diterima sementara:
   "judul": "Sistem Deteksi Kemiripan Judul Skripsi"
 }
 ```
+
+## Bentuk Hasil Similarity
+
+Contoh `POST /api/v1/similarity/check`:
+
+```json
+{
+  "query": {
+    "judul": "Sistem Deteksi Kemiripan Judul Skripsi"
+  },
+  "total_found": 2,
+  "results": [
+    {
+      "id": 123,
+      "similarity_score": 0.9211,
+      "similarity_persen": "92.11%",
+      "level": "SANGAT TINGGI"
+    },
+    {
+      "id": 88,
+      "similarity_score": 0.8734,
+      "similarity_persen": "87.34%",
+      "level": "TINGGI"
+    }
+  ]
+}
+```
+
+Laravel lalu mengambil detail skripsi berdasarkan daftar `id` tersebut dari MySQL.
 
 ## Menjalankan Lokal
 
@@ -117,51 +136,6 @@ Port internal container:
 
 - `7860`
 
-## Deploy ke Hugging Face Spaces
-
-Repo ini sudah disiapkan untuk Docker Space.
-
-### 1. Buat Space
-
-- pilih SDK `Docker`
-- push repo ini ke Space
-- `README.md` sudah memiliki front matter `sdk: docker` dan `app_port: 7860`
-
-### 2. Atur Secrets dan Variables di Space Settings
-
-Minimal set:
-
-- `SYNC_SECRET`
-
-Opsional tapi dianjurkan:
-
-- `ALLOWED_ORIGINS`
-- `LOG_LEVEL`
-- `INFERENCE_CONCURRENCY`
-- `BULK_SYNC_CHUNK_SIZE`
-
-Contoh runtime variables untuk Space:
-
-```text
-ALLOWED_ORIGINS=https://your-laravel-domain.example
-LOG_LEVEL=INFO
-INFERENCE_CONCURRENCY=2
-BULK_SYNC_CHUNK_SIZE=50
-```
-
-### 3. Storage dan Persistensi
-
-- SQLite, ChromaDB, dan cache Hugging Face diarahkan ke `/data`
-- pada Hugging Face Spaces, data di disk akan hilang saat restart jika Anda belum menambahkan persistent storage
-- jika ingin hasil sync tetap aman antar restart, aktifkan persistent storage untuk Space
-
-### 4. Catatan Operasional
-
-- endpoint sync bersifat public di internet, jadi `SYNC_SECRET` wajib kuat dan tidak boleh dibocorkan
-- batasi siapa yang mengetahui URL sync dan secret
-- setelah deploy pertama, lakukan sync dari Laravel lalu cek `/health`
-- bila metadata lama masih muncul sebagai `laravel_id` di vector store lama, jalankan reindex sekali
-
 ## Integrasi Laravel
 
 Set environment di Laravel:
@@ -171,7 +145,7 @@ SIMILARITY_API_URL=https://<username>-<space-name>.hf.space
 SIMILARITY_API_SECRET=<nilai SYNC_SECRET yang sama>
 ```
 
-Contoh observer Laravel yang sudah memakai `skripsi_id`:
+Contoh observer Laravel:
 
 ```php
 class SkripsiObserver
@@ -199,59 +173,42 @@ class SkripsiObserver
 }
 ```
 
-### Rekomendasi Integrasi Laravel
+Rekomendasi integrasi:
 
 - gunakan `bulk-upsert` untuk initial sync
 - gunakan observer untuk create, update, delete setelah initial sync
-- jika Anda sedang rollout bertahap, payload lama `laravel_id` masih akan diterima, tetapi sebaiknya segera ganti ke `skripsi_id`
+- setelah `check` mengembalikan daftar `id`, detail dan business rule tetap diambil di Laravel
 
 ## Reindex
 
-Setelah data selesai disinkron dari Laravel, reindex bisa dijalankan untuk membangun ulang embedding di ChromaDB:
+Karena service ini tidak lagi menyimpan salinan data skripsi lokal, reindex dilakukan dengan mengirim ulang export JSON dari aplikasi utama:
 
 ```bash
-python scripts/reindex.py --token <SYNC_SECRET> --batch-size 100
+python scripts/reindex.py --token <SYNC_SECRET> --input data-skripsi.json --batch-size 100
 ```
 
 Jika API berjalan di Docker:
 
 ```bash
-docker compose exec similarity-api python scripts/reindex.py --url http://localhost:7860 --token <SYNC_SECRET> --batch-size 100
+docker compose exec similarity-api python scripts/reindex.py --url http://localhost:7860 --token <SYNC_SECRET> --input /data/data-skripsi.json --batch-size 100
 ```
 
 Gunakan reindex saat:
 
 - model embedding berubah
-- metadata ChromaDB lama perlu diperbarui
-- Anda migrasi server atau storage
+- metadata vector store lama perlu dirapikan
+- migrasi server atau storage
 - ChromaDB kosong atau rusak
 
 ## Keamanan
 
 - `SYNC_SECRET` wajib minimal 16 karakter dan sebaiknya acak panjang
 - verifikasi token sync memakai constant-time compare
-- container berjalan sebagai user non-root UID `1000`, cocok untuk Hugging Face Spaces
+- container berjalan sebagai user non-root UID `1000`
 - model tidak di-download saat runtime
-- thread CPU default diturunkan agar container lebih hemat resource
 
-## Verifikasi Setelah Deploy
+## Catatan Migrasi
 
-### Health check
-
-```bash
-curl https://<username>-<space-name>.hf.space/health
-```
-
-### Cek similarity
-
-```bash
-curl -X POST https://<username>-<space-name>.hf.space/api/v1/similarity/check \
-  -H "Content-Type: application/json" \
-  -d "{\"judul\":\"Sistem Deteksi Kemiripan Judul Skripsi\"}"
-```
-
-## Catatan Migrasi Data Lama
-
-- database SQLite lama yang masih memakai kolom `laravel_id` akan dimigrasikan otomatis saat startup menjadi `skripsi_id`
-- hasil similarity lama yang metadata ChromaDB-nya masih memakai `laravel_id` tetap dibaca kompatibel
-- untuk merapikan metadata vector store sepenuhnya, jalankan reindex sekali setelah deploy versi baru
+- tabel SQLite lama yang sebelumnya menyimpan cache data skripsi tidak lagi dipakai oleh aplikasi
+- metadata vector store lama yang masih menyimpan field tambahan tetap bisa terbaca
+- untuk merapikan metadata vector store agar minimum, jalankan reindex sekali setelah deploy versi ini

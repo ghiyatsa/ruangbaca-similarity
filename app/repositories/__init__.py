@@ -1,3 +1,3 @@
-from app.repositories.skripsi_repo import SkripsiRepository
+from app.repositories.sync_job_repo import SyncJobRepository
 
-__all__ = ["SkripsiRepository"]
+__all__ = ["SyncJobRepository"]
