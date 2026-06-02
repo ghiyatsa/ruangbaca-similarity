@@ -127,6 +127,16 @@ class VectorStore:
 
     # ── Penghapusan ────────────────────────────────────────────────────────────
 
+    async def indexed_ids(self, limit: int = 500, offset: int = 0) -> List[int]:
+        """Ambil daftar ID skripsi yang saat ini tersimpan di vector store."""
+        results = await self._run(
+            self.collection.get,
+            limit=limit,
+            offset=offset,
+        )
+
+        return [int(doc_id) for doc_id in results.get("ids", [])]
+
     async def delete(self, skripsi_id: int) -> None:
         """Hapus embedding berdasarkan id."""
         await self._run(self.collection.delete, ids=[str(skripsi_id)])

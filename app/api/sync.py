@@ -10,7 +10,7 @@ from itertools import islice
 from typing import List
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import verify_sync_token
@@ -21,6 +21,7 @@ from app.schemas.skripsi import (
     BulkSyncJobStatusResponse,
     BulkSyncRequest,
     BulkSyncResponse,
+    IndexedIdsResponse,
     SyncItem,
     SyncResponse,
 )
@@ -268,6 +269,37 @@ async def show_job_status(
         created_at=job.created_at,
         started_at=job.started_at,
         completed_at=job.completed_at,
+    )
+
+
+@router.get(
+    "/indexed-ids",
+    response_model=IndexedIdsResponse,
+    summary="Daftar skripsi yang sudah terindeks",
+    description=(
+        "Mengembalikan daftar `skripsi_id` yang saat ini tersimpan di vector store. "
+        "Endpoint ini dipakai Laravel untuk rekonsiliasi status sync berdasarkan ID sumber, bukan berdasarkan count mentah."
+    ),
+    dependencies=[Depends(verify_sync_token)],
+)
+async def indexed_ids(
+    request: Request,
+    limit: int = Query(default=500, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> IndexedIdsResponse:
+    vector_store = request.app.state.vector_store
+
+    total_indexed = await vector_store.count()
+    ids = await vector_store.indexed_ids(limit=limit, offset=offset)
+
+    next_offset = offset + len(ids)
+    if next_offset >= total_indexed:
+        next_offset = None
+
+    return IndexedIdsResponse(
+        ids=ids,
+        total_indexed=total_indexed,
+        next_offset=next_offset,
     )
 
 

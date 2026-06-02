@@ -139,6 +139,22 @@ class BulkSyncJobStatusResponse(BaseModel):
     )
 
 
+class IndexedIdsResponse(BaseModel):
+    ids: List[int]
+    total_indexed: int
+    next_offset: Optional[int] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "ids": [123, 124, 125],
+                "total_indexed": 477,
+                "next_offset": 500,
+            }
+        },
+    )
+
+
 class SimilarityCheckRequest(BaseModel):
     """
     Request cek kemiripan.
