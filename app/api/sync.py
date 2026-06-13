@@ -171,7 +171,6 @@ async def resume_unfinished_jobs(app_state) -> None:
 async def upsert_one(
     request: Request,
     body: SyncItem,
-    _db: AsyncSession = Depends(get_db),
 ) -> SyncResponse:
     embedding_service = request.app.state.embedding_service
     vector_store = request.app.state.vector_store
@@ -309,7 +308,7 @@ async def indexed_ids(
     summary="Hapus skripsi berdasarkan skripsi_id sumber",
     description=(
         "Dipanggil oleh Laravel Observer saat skripsi dihapus. "
-        "Endpoint ini hanya menghapus embedding dari vector store berdasarkan ID sumber. "
+        "Endpoint ini idempotent: jika ID tidak ada di vector store, respons tetap 204 karena kondisi akhir sudah benar. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
     dependencies=[Depends(verify_sync_token)],
@@ -317,7 +316,6 @@ async def indexed_ids(
 async def delete_by_skripsi_id(
     request: Request,
     skripsi_id: int,
-    _db: AsyncSession = Depends(get_db),
 ) -> None:
     vector_store = request.app.state.vector_store
 
