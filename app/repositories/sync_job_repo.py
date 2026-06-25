@@ -1,55 +1,71 @@
+"""
+In-memory job tracker untuk bulk sync jobs.
+FastAPI ini tidak lagi menyimpan database SQLite, membuatnya stateless dan cloud-ready.
+"""
 from datetime import datetime
-from typing import List
+from typing import Dict, List, Optional
+from pydantic import BaseModel
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+class JobState(BaseModel):
+    id: str
+    status: str
+    total_received: int
+    total_processed: int
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
-from app.models.sync_job import SyncJob
-
+# Global in-memory storage for jobs
+_jobs: Dict[str, JobState] = {}
 
 class SyncJobRepository:
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
-
-    async def create(self, *, job_id: str, payload_json: str, total_received: int) -> SyncJob:
-        job = SyncJob(
+    """Mock repository yang beroperasi in-memory untuk tracking status bulk job."""
+    
+    @staticmethod
+    async def create(*, job_id: str, payload_json: str, total_received: int) -> JobState:
+        # payload_json disimpan in-memory (di-attach atau diabaikan jika tidak diperlukan lagi)
+        job = JobState(
             id=job_id,
             status="pending",
-            payload_json=payload_json,
             total_received=total_received,
             total_processed=0,
+            created_at=datetime.utcnow()
         )
-        self.db.add(job)
-        await self.db.flush()
+        _jobs[job_id] = job
+        # Kita simpan payload di storage lokal global jika task perlu deserialisasi
+        job.__dict__["_payload_json"] = payload_json
         return job
 
-    async def find_by_id(self, job_id: str) -> SyncJob | None:
-        result = await self.db.execute(select(SyncJob).where(SyncJob.id == job_id))
-        return result.scalar_one_or_none()
+    @staticmethod
+    async def find_by_id(job_id: str) -> Optional[JobState]:
+        return _jobs.get(job_id)
 
-    async def list_unfinished(self) -> List[SyncJob]:
-        result = await self.db.execute(
-            select(SyncJob).where(SyncJob.status.in_(["pending", "processing"]))
-        )
-        return list(result.scalars().all())
+    @staticmethod
+    async def list_unfinished() -> List[JobState]:
+        return [job for job in _jobs.values() if job.status in ("pending", "processing")]
 
-    async def mark_processing(self, job: SyncJob) -> None:
+    @staticmethod
+    async def mark_processing(job: JobState) -> None:
         job.status = "processing"
         job.total_processed = 0
         job.error_message = None
         job.started_at = datetime.utcnow()
         job.completed_at = None
 
-    async def update_progress(self, job: SyncJob, total_processed: int) -> None:
+    @staticmethod
+    async def update_progress(job: JobState, total_processed: int) -> None:
         job.total_processed = total_processed
 
-    async def mark_completed(self, job: SyncJob) -> None:
+    @staticmethod
+    async def mark_completed(job: JobState) -> None:
         job.status = "completed"
         job.total_processed = job.total_received
         job.error_message = None
         job.completed_at = datetime.utcnow()
 
-    async def mark_failed(self, job: SyncJob, error_message: str) -> None:
+    @staticmethod
+    async def mark_failed(job: JobState, error_message: str) -> None:
         job.status = "failed"
         job.error_message = error_message[:2000]
         job.completed_at = datetime.utcnow()

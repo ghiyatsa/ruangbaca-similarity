@@ -11,11 +11,9 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import verify_sync_token
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal, get_db
 from app.repositories.sync_job_repo import SyncJobRepository
 from app.schemas.skripsi import (
     BulkSyncJobStatusResponse,
@@ -66,17 +64,15 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
 
     logger.info("Bulk-upsert job dimulai: %s", job_id)
 
-    async with AsyncSessionLocal() as db:
-        job_repo = SyncJobRepository(db)
-        job = await job_repo.find_by_id(job_id)
+    job = await SyncJobRepository.find_by_id(job_id)
 
-        if job is None:
-            logger.warning("Bulk-upsert job tidak ditemukan: %s", job_id)
-            return
+    if job is None:
+        logger.warning("Bulk-upsert job tidak ditemukan: %s", job_id)
+        return
 
-        items, reset_index = _deserialize_payload(job.payload_json)
-        await job_repo.mark_processing(job)
-        await db.commit()
+    payload_json = job.__dict__.get("_payload_json", "{}")
+    items, reset_index = _deserialize_payload(payload_json)
+    await SyncJobRepository.mark_processing(job)
 
     processed = 0
     expected_total = len({item.skripsi_id for item in items})
@@ -106,12 +102,9 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
 
             processed += len(chunk)
 
-            async with AsyncSessionLocal() as db:
-                job_repo = SyncJobRepository(db)
-                job = await job_repo.find_by_id(job_id)
-                if job is not None:
-                    await job_repo.update_progress(job, processed)
-                    await db.commit()
+            job = await SyncJobRepository.find_by_id(job_id)
+            if job is not None:
+                await SyncJobRepository.update_progress(job, processed)
 
         total_indexed = await vector_store.count()
 
@@ -127,28 +120,21 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
                 f"(received={expected_total}, vector={total_indexed})."
             )
 
-        async with AsyncSessionLocal() as db:
-            job_repo = SyncJobRepository(db)
-            job = await job_repo.find_by_id(job_id)
-            if job is not None:
-                await job_repo.mark_completed(job)
-                await db.commit()
+        job = await SyncJobRepository.find_by_id(job_id)
+        if job is not None:
+            await SyncJobRepository.mark_completed(job)
 
         logger.info("Bulk-upsert job selesai: %s", job_id)
     except Exception as exception:
         logger.exception("Bulk-upsert job gagal: %s", job_id)
 
-        async with AsyncSessionLocal() as db:
-            job_repo = SyncJobRepository(db)
-            job = await job_repo.find_by_id(job_id)
-            if job is not None:
-                await job_repo.mark_failed(job, str(exception))
-                await db.commit()
+        job = await SyncJobRepository.find_by_id(job_id)
+        if job is not None:
+            await SyncJobRepository.mark_failed(job, str(exception))
 
 
 async def resume_unfinished_jobs(app_state) -> None:
-    async with AsyncSessionLocal() as db:
-        jobs = await SyncJobRepository(db).list_unfinished()
+    jobs = await SyncJobRepository.list_unfinished()
 
     for job in jobs:
         asyncio.create_task(_run_bulk_upsert_job(app_state, job.id))
@@ -212,20 +198,17 @@ async def upsert_one(
 async def bulk_upsert(
     request: Request,
     body: BulkSyncRequest,
-    db: AsyncSession = Depends(get_db),
 ) -> BulkSyncResponse:
     if not body.data:
         raise HTTPException(status_code=400, detail="Data tidak boleh kosong.")
 
     job_id = str(uuid4())
     payload_json = _serialize_payload(body.data, body.reset_index)
-    job_repo = SyncJobRepository(db)
-    await job_repo.create(
+    await SyncJobRepository.create(
         job_id=job_id,
         payload_json=payload_json,
         total_received=len(body.data),
     )
-    await db.commit()
 
     asyncio.create_task(_run_bulk_upsert_job(request.app.state, job_id))
     logger.info(
@@ -252,9 +235,8 @@ async def bulk_upsert(
 )
 async def show_job_status(
     job_id: str,
-    db: AsyncSession = Depends(get_db),
 ) -> BulkSyncJobStatusResponse:
-    job = await SyncJobRepository(db).find_by_id(job_id)
+    job = await SyncJobRepository.find_by_id(job_id)
 
     if job is None:
         raise HTTPException(status_code=404, detail="Job tidak ditemukan.")

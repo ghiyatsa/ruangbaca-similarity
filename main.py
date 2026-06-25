@@ -13,7 +13,6 @@ from slowapi.errors import RateLimitExceeded
 from app.api import similarity, sync
 from app.api.deps import verify_sync_token
 from app.core.config import settings
-from app.core.database import init_db
 from app.core.limiter import limiter
 from app.core.logging_config import setup_logging
 from app.services.embedding_service import EmbeddingService
@@ -28,14 +27,10 @@ vector_store = VectorStore()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: muat model dan inisialisasi DB. Shutdown: cleanup."""
+    """Startup: muat model. Shutdown: cleanup."""
     logger.info("Memuat model embedding: %s ...", settings.MODEL_NAME)
     await embedding_service.load_model()
     logger.info("Model berhasil dimuat.")
-
-    logger.info("Menginisialisasi database ...")
-    await init_db()
-    logger.info("Database siap.")
 
     app.state.embedding_service = embedding_service
     app.state.vector_store = vector_store
