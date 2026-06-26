@@ -4,6 +4,7 @@ Router: Deteksi Kemiripan Judul Skripsi.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -116,3 +117,48 @@ async def compare_two(
         "similarity_persen": format_persen(score),
         "level": get_similarity_level(score),
     }
+
+
+@router.get(
+    "/stats",
+    summary="Statistik metadata sebaran skripsi",
+    description="Mengembalikan agregasi data per program studi dan per tahun dari metadata vector store untuk keperluan bab statistik laporan.",
+)
+async def get_stats(request: Request) -> dict:
+    vector_store = request.app.state.vector_store
+    
+    total = await vector_store.count()
+    if total == 0:
+        return {
+            "total_indexed": 0,
+            "distribusi_program_studi": {},
+            "distribusi_tahun": {},
+        }
+        
+    # Ambil maksimal 10.000 data di database untuk agregasi lokal
+    results = await vector_store._run(
+        vector_store.collection.get,
+        limit=10000,
+        include=["metadatas"]
+    )
+    
+    metadatas = results.get("metadatas", [])
+    
+    prodi_list = []
+    tahun_list = []
+    
+    for meta in metadatas:
+        if not meta:
+            continue
+        prodi = meta.get("program_studi", "Tidak Diketahui")
+        tahun = meta.get("tahun", 0)
+        prodi_list.append(prodi)
+        if tahun and tahun > 0:
+            tahun_list.append(str(tahun))
+            
+    return {
+        "total_indexed": total,
+        "distribusi_program_studi": dict(Counter(prodi_list)),
+        "distribusi_tahun": dict(Counter(tahun_list)),
+    }
+

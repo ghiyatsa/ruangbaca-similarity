@@ -22,11 +22,6 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PORT: int = 8181
 
-    # ── Database — SQLite only ─────────────────────────────────────────────────
-    # SQLite lokal dihapus karena status sync didelegasikan ke master Laravel DB.
-    # Parameter ini dipertahankan hanya agar config schema backward-compatible.
-    DATABASE_URL: str = "sqlite+aiosqlite:///./skripsi.db"
-
     # ── ChromaDB (vector store) ─────────────────────────────────────────────────
     CHROMA_DB_PATH: str = "./chroma_db"
     COLLECTION_NAME: str = "skripsi_embeddings"

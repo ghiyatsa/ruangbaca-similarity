@@ -17,6 +17,25 @@ Repo ini sekarang memakai arsitektur `vector_only`:
 
 ## Ringkasan Arsitektur
 
+```mermaid
+graph TD
+    User([Pengguna / Mahasiswa]) -->|Input Judul Baru| Laravel[Laravel: ruangbaca]
+    Laravel -->|POST /api/v1/similarity/check| FastAPI[FastAPI Similarity API]
+    
+    FastAPI -->|1. Generate Embedding| Model[Sentence Transformers / ONNX Model]
+    FastAPI -->|2. Cosine Similarity Query| ChromaDB[(ChromaDB Vector Store)]
+    
+    ChromaDB -->|Kembalikan Top K Serupa| FastAPI
+    FastAPI -->|Kembalikan Daftar ID & Skor| Laravel
+    
+    Laravel -->|Query Detail Data ke DB| MySQL[(MySQL Database)]
+    Laravel -->|Tampilkan Hasil Analisis Kemiripan| User
+    
+    %% Alur Sinkronisasi (Data Sync)
+    Admin([Admin / Observer]) -->|Mengubah / Menambah Data Skripsi| Laravel
+    Laravel -->|POST /api/v1/sync/upsert| FastAPI
+```
+
 - FastAPI melayani endpoint similarity dan sync
 - MySQL di Laravel menyimpan data skripsi utama
 - ChromaDB menyimpan embedding untuk semantic similarity
@@ -32,8 +51,9 @@ Repo ini sekarang memakai arsitektur `vector_only`:
 
 ### Similarity
 
-- `POST /api/v1/similarity/check`
-- `POST /api/v1/similarity/compare`
+- `POST /api/v1/similarity/check` - Cek kemiripan judul skripsi
+- `POST /api/v1/similarity/compare` - Bandingkan dua judul secara langsung (uji coba/offline)
+- `GET /api/v1/similarity/stats` - Statistik agregasi metadata untuk visualisasi laporan
 
 ### Sync dari Laravel
 
@@ -43,10 +63,12 @@ Semua endpoint sync wajib header:
 Authorization: Bearer <SYNC_SECRET>
 ```
 
-- `POST /api/v1/sync/upsert`
-- `POST /api/v1/sync/bulk-upsert`
-- `GET /api/v1/sync/jobs/{job_id}`
-- `DELETE /api/v1/sync/{skripsi_id}`
+- `POST /api/v1/sync/upsert` - Sinkronisasi satu data skripsi (Observer)
+- `POST /api/v1/sync/bulk-upsert` - Sinkronisasi massal asinkron (Artisan command)
+- `GET /api/v1/sync/jobs/{job_id}` - Cek status bulk sync job
+- `GET /api/v1/sync/indexed-ids` - Daftar ID skripsi yang sudah terindeks (rekonsiliasi)
+- `DELETE /api/v1/sync/{skripsi_id}` - Hapus skripsi dari indeks
+
 
 ## Contoh Payload Sync
 
@@ -200,6 +222,14 @@ Gunakan reindex saat:
 - migrasi server atau storage
 - ChromaDB kosong atau rusak
 
+## Pengujian & Evaluasi Akurasi
+
+Untuk mempermudah penulisan Bab Pengujian di Laporan Skripsi, jalankan script evaluasi berikut untuk menguji akurasi model secara otomatis menggunakan Confusion Matrix (Precision, Recall, F1-Score):
+
+```bash
+python scripts/evaluate.py --token <SYNC_SECRET> --threshold 0.70
+```
+
 ## Keamanan
 
 - `SYNC_SECRET` wajib minimal 16 karakter dan sebaiknya acak panjang
@@ -211,4 +241,5 @@ Gunakan reindex saat:
 
 - tabel SQLite lama yang sebelumnya menyimpan cache data skripsi tidak lagi dipakai oleh aplikasi
 - metadata vector store lama yang masih menyimpan field tambahan tetap bisa terbaca
-- untuk merapikan metadata vector store agar minimum, jalankan reindex sekali setelah deploy versi ini
+- untuk merapikan metadata vector store agar mendapat metadata `program_studi` dan `tahun` secara bersih untuk endpoint `/stats`, jalankan reindex sekali setelah deploy versi ini
+

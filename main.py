@@ -102,7 +102,7 @@ async def root():
     tags=["Meta"],
     summary="Health check service",
     description=(
-        "Mengembalikan status service, model embedding yang aktif, mode penyimpanan (`vector_only`), "
+        "Mengembalikan status service, model embedding yang aktif, "
         "jumlah vector yang sudah terindeks, dan statistik cache embedding."
     ),
 )
@@ -114,7 +114,6 @@ async def health_check():
         "model_loaded": embedding_service.is_loaded,
         "model_name": settings.MODEL_NAME,
         "model_backend": "onnx" if embedding_service.is_onnx else "sentence-transformers",
-        "storage_mode": "vector_only",
         "total_indexed": total,
         "embedding_cache": cache,
     }
