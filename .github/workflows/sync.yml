@@ -1,0 +1,24 @@
+name: Sync to Hugging Face Hub
+
+on:
+  push:
+    branches: [main]
+
+  # Jalankan workflow ini secara manual dari tab Actions
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force https://ghiyatsa:$HF_TOKEN@huggingface.co/spaces/ghiyatsa/skripsi-similarity main
