@@ -1,18 +1,18 @@
 ---
-title: Skripsi Similarity API
+title: RuangBaca Similarity API
 sdk: docker
 app_port: 7860
 ---
 
-# Skripsi Similarity API
+# RuangBaca Similarity API
 
-API deteksi kemiripan judul skripsi berbasis FastAPI, Sentence Transformers, dan ChromaDB.
+API deteksi kemiripan judul skripsi dan laporan kerja praktek berbasis FastAPI, Sentence Transformers, dan ChromaDB.
 
-Repo ini sekarang memakai arsitektur `vector_only`:
+Repo ini memakai arsitektur `vector_only`:
 
-- Laravel/ruangbaca tetap menjadi source of truth data skripsi.
+- Laravel/ruangbaca tetap menjadi source of truth data skripsi dan laporan kerja praktek.
 - FastAPI hanya menerima payload sinkronisasi, membuat embedding, dan menyimpan vector.
-- Hasil similarity mengembalikan `id` sumber + skor, lalu detail data diambil lagi oleh Laravel.
+- Hasil similarity mengembalikan `document_id`, `document_type`, dan skor kemiripan, lalu detail data diambil lagi oleh Laravel.
 
 ---
 
@@ -46,18 +46,18 @@ graph TD
     FastAPI -->|2. Cosine Similarity Query| ChromaDB[(ChromaDB Vector Store)]
     
     ChromaDB -->|Kembalikan Top K Serupa| FastAPI
-    FastAPI -->|Kembalikan Daftar ID & Skor| Laravel
+    FastAPI -->|Kembalikan Daftar ID, Tipe, & Skor| Laravel
     
     Laravel -->|Query Detail Data ke DB| MySQL[(MySQL Database)]
     Laravel -->|Tampilkan Hasil Analisis Kemiripan| User
     
     %% Alur Sinkronisasi (Data Sync)
-    Admin([Admin / Observer]) -->|Mengubah / Menambah Data Skripsi| Laravel
+    Admin([Admin / Observer]) -->|Mengubah / Menambah Data Dokumen| Laravel
     Laravel -->|POST /api/v1/sync/upsert| FastAPI
 ```
 
 - FastAPI melayani endpoint similarity dan sync.
-- MySQL di Laravel menyimpan data skripsi utama.
+- MySQL di Laravel menyimpan data skripsi dan laporan kerja praktek.
 - ChromaDB menyimpan embedding untuk semantic similarity.
 - Model embedding lokal dibundel ke image dan dipakai dalam mode offline.
 - Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan.
@@ -73,7 +73,7 @@ graph TD
 
 ### Similarity
 
-- `POST /api/v1/similarity/check` - Cek kemiripan judul skripsi
+- `POST /api/v1/similarity/check` - Cek kemiripan judul (Skripsi / Laporan KP) dengan opsi penyaringan `document_type`.
 - `POST /api/v1/similarity/compare` - Bandingkan dua judul secara langsung (uji coba/offline)
 - `GET /api/v1/similarity/stats` - Statistik agregasi metadata untuk visualisasi laporan
 
@@ -85,12 +85,10 @@ Semua endpoint sync wajib header:
 Authorization: Bearer <SYNC_SECRET>
 ```
 
-- `POST /api/v1/sync/upsert` - Sinkronisasi satu data skripsi (Observer)
+- `POST /api/v1/sync/upsert` - Sinkronisasi satu data dokumen (Observer)
 - `POST /api/v1/sync/bulk-upsert` - Sinkronisasi massal asinkron (Artisan command)
 - `GET /api/v1/sync/jobs/{job_id}` - Cek status bulk sync job
-- `GET /api/v1/sync/indexed-ids` - Daftar ID skripsi yang sudah terindeks (rekonsiliasi)
-- `DELETE /api/v1/sync/{skripsi_id}` - Hapus skripsi dari indeks
-
+- `DELETE /api/v1/sync/{document_id}` - Hapus dokumen dari indeks (Skripsi / Laporan KP)
 
 ## Contoh Payload Sync
 
@@ -98,7 +96,8 @@ Payload baru yang direkomendasikan:
 
 ```json
 {
-  "skripsi_id": 123,
+  "document_id": "skripsi_123",
+  "document_type": "skripsi",
   "judul": "Sistem Deteksi Kemiripan Judul Skripsi",
   "abstrak": "Abstrak opsional",
   "kata_kunci": "nlp, similarity",
@@ -109,34 +108,32 @@ Payload baru yang direkomendasikan:
 }
 ```
 
-Payload lama berikut masih diterima sementara:
-
-```json
-{
-  "laravel_id": 123,
-  "judul": "Sistem Deteksi Kemiripan Judul Skripsi"
-}
-```
-
 ## Bentuk Hasil Similarity
 
-Contoh `POST /api/v1/similarity/check`:
+Contoh `POST /api/v1/similarity/check` (Payload request menyertakan `"document_type": "skripsi"`):
 
 ```json
 {
   "query": {
-    "judul": "Sistem Deteksi Kemiripan Judul Skripsi"
+    "judul": "Sistem Deteksi Kemiripan Judul Skripsi",
+    "document_type": "skripsi"
   },
   "total_found": 2,
   "results": [
     {
-      "id": 123,
+      "id": "skripsi_123",
+      "document_id": 123,
+      "document_type": "skripsi",
+      "skripsi_id": 123,
       "similarity_score": 0.9211,
       "similarity_persen": "92.11%",
       "level": "SANGAT TINGGI"
     },
     {
-      "id": 88,
+      "id": "skripsi_88",
+      "document_id": 88,
+      "document_type": "skripsi",
+      "skripsi_id": 88,
       "similarity_score": 0.8734,
       "similarity_persen": "87.34%",
       "level": "TINGGI"
@@ -145,7 +142,7 @@ Contoh `POST /api/v1/similarity/check`:
 }
 ```
 
-Laravel lalu mengambil detail skripsi berdasarkan daftar `id` tersebut dari MySQL.
+Laravel lalu mengambil detail data berdasarkan `document_id` dan `document_type` tersebut dari MySQL.
 
 ## Menjalankan Lokal
 
