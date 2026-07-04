@@ -15,11 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from app.api.deps import verify_sync_token
 from app.core.config import settings
 from app.repositories.sync_job_repo import SyncJobRepository
-from app.schemas.skripsi import (
+from app.schemas.document import (
     BulkSyncJobStatusResponse,
     BulkSyncRequest,
     BulkSyncResponse,
-    IndexedIdsResponse,
     SyncItem,
     SyncResponse,
 )
@@ -75,7 +74,7 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
     await SyncJobRepository.mark_processing(job)
 
     processed = 0
-    expected_total = len({item.skripsi_id for item in items})
+    expected_total = len({item.document_id for item in items})
 
     try:
         if reset_index:
@@ -96,7 +95,7 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
             ]
             embeddings = await embedding_service.encode_batch_for_index(items_for_encode)
 
-            ids = [item.skripsi_id for item in chunk]
+            ids = [item.document_id for item in chunk]
             metadatas = [build_metadata(item) for item in chunk]
             await vector_store.upsert_batch(ids, embeddings, metadatas)
 
@@ -170,14 +169,15 @@ async def upsert_one(
         bobot_kata_kunci=body.bobot_kata_kunci,
     )
     await vector_store.upsert(
-        skripsi_id=body.skripsi_id,
+        skripsi_id=body.document_id,
         embedding=embedding,
         metadata=build_metadata(body),
     )
 
-    logger.info("Upsert skripsi skripsi_id=%d selesai.", body.skripsi_id)
+    logger.info("Upsert dokumen document_id=%s selesai.", body.document_id)
     return SyncResponse(
-        message="Skripsi berhasil di-upsert",
+        message="Dokumen berhasil di-upsert",
+        document_id=body.document_id,
         skripsi_id=body.skripsi_id,
     )
 
@@ -253,54 +253,28 @@ async def show_job_status(
     )
 
 
-@router.get(
-    "/indexed-ids",
-    response_model=IndexedIdsResponse,
-    summary="Daftar skripsi yang sudah terindeks",
-    description=(
-        "Mengembalikan daftar `skripsi_id` yang saat ini tersimpan di vector store. "
-        "Endpoint ini dipakai Laravel untuk rekonsiliasi status sync berdasarkan ID sumber, bukan berdasarkan count mentah."
-    ),
-    dependencies=[Depends(verify_sync_token)],
-)
-async def indexed_ids(
-    request: Request,
-    limit: int = Query(default=500, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-) -> IndexedIdsResponse:
-    vector_store = request.app.state.vector_store
-
-    total_indexed = await vector_store.count()
-    ids = await vector_store.indexed_ids(limit=limit, offset=offset)
-
-    next_offset = offset + len(ids)
-    if next_offset >= total_indexed:
-        next_offset = None
-
-    return IndexedIdsResponse(
-        ids=ids,
-        total_indexed=total_indexed,
-        next_offset=next_offset,
-    )
-
-
 @router.delete(
-    "/{skripsi_id}",
+    "/{document_id}",
     status_code=204,
-    summary="Hapus skripsi berdasarkan skripsi_id sumber",
+    summary="Hapus dokumen berdasarkan ID sumber",
     description=(
-        "Dipanggil oleh Laravel Observer saat skripsi dihapus. "
+        "Dipanggil oleh Laravel saat dokumen dihapus. "
         "Endpoint ini idempotent: jika ID tidak ada di vector store, respons tetap 204 karena kondisi akhir sudah benar. "
         "Wajib menyertakan header Authorization: Bearer <SYNC_SECRET> atau X-Similarity-Api-Secret."
     ),
     dependencies=[Depends(verify_sync_token)],
 )
-async def delete_by_skripsi_id(
+async def delete_by_document_id(
     request: Request,
-    skripsi_id: int,
+    document_id: str,
 ) -> None:
     vector_store = request.app.state.vector_store
 
-    await vector_store.delete(skripsi_id)
+    # Backward compatibility: if purely numeric, default to skripsi_ prefix
+    target_id = document_id
+    if document_id.isdigit():
+        target_id = f"skripsi_{document_id}"
 
-    logger.info("Skripsi skripsi_id=%d dihapus.", skripsi_id)
+    await vector_store.delete(target_id)
+
+    logger.info("Dokumen document_id=%s (target_id=%s) dihapus.", document_id, target_id)

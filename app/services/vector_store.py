@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import partial
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -87,6 +87,7 @@ class VectorStore:
         query_embedding: np.ndarray,
         top_k: int = 5,
         exclude_id: Optional[int] = None,
+        document_type: Optional[str] = None,
     ) -> List[dict]:
         """
         Cari `top_k` embedding paling mirip dengan `query_embedding`.
@@ -98,16 +99,22 @@ class VectorStore:
 
         n_results = min(top_k + (1 if exclude_id else 0), count)
 
+        query_params = {
+            "query_embeddings": [query_embedding.tolist()],
+            "n_results": n_results,
+            "include": ["metadatas", "distances"],
+        }
+        if document_type:
+            query_params["where"] = {"document_type": document_type}
+
         results = await self._run(
             self.collection.query,
-            query_embeddings=[query_embedding.tolist()],
-            n_results=n_results,
-            include=["metadatas", "distances"],
+            **query_params
         )
 
         output: List[dict] = []
         for i, doc_id in enumerate(results["ids"][0]):
-            if exclude_id and int(doc_id) == exclude_id:
+            if exclude_id and doc_id == str(exclude_id):
                 continue
 
             distance   = results["distances"][0][i]
@@ -115,7 +122,7 @@ class VectorStore:
             metadata   = results["metadatas"][0][i]
 
             output.append({
-                "id": int(doc_id),
+                "id": doc_id,
                 "similarity_score": similarity,
                 **metadata,
             })
@@ -127,17 +134,17 @@ class VectorStore:
 
     # ── Penghapusan ────────────────────────────────────────────────────────────
 
-    async def indexed_ids(self, limit: int = 500, offset: int = 0) -> List[int]:
-        """Ambil daftar ID skripsi yang saat ini tersimpan di vector store."""
+    async def indexed_ids(self, limit: int = 500, offset: int = 0) -> List[str]:
+        """Ambil daftar ID dokumen yang saat ini tersimpan di vector store."""
         results = await self._run(
             self.collection.get,
             limit=limit,
             offset=offset,
         )
 
-        return [int(doc_id) for doc_id in results.get("ids", [])]
+        return [str(doc_id) for doc_id in results.get("ids", [])]
 
-    async def delete(self, skripsi_id: int) -> None:
+    async def delete(self, skripsi_id: Union[int, str]) -> None:
         """Hapus embedding berdasarkan id."""
         await self._run(self.collection.delete, ids=[str(skripsi_id)])
 

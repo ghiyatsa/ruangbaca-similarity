@@ -9,7 +9,7 @@ from collections import Counter
 from fastapi import APIRouter, HTTPException, Request
 
 from app.core.limiter import limiter
-from app.schemas.skripsi import (
+from app.schemas.document import (
     SimilarityCheckRequest,
     SimilarityCheckResponse,
     SimilarResult,
@@ -51,6 +51,7 @@ async def check_similarity(
     raw_results = await vector_store.search(
         query_embedding=query_embedding,
         top_k=body.top_k,
+        document_type=body.document_type,
     )
 
     results: list[SimilarResult] = []
@@ -59,9 +60,25 @@ async def check_similarity(
         if score < body.threshold:
             continue
 
+        doc_id_str = result.get("document_id", str(result["id"]))
+        if "_" in doc_id_str:
+            parts = doc_id_str.split("_")
+            try:
+                doc_id = int(parts[-1])
+                doc_type = "_".join(parts[:-1])
+            except ValueError:
+                doc_id = 0
+                doc_type = "unknown"
+        else:
+            doc_id = int(doc_id_str) if doc_id_str.isdigit() else 0
+            doc_type = result.get("document_type", "skripsi")
+
         results.append(
             SimilarResult(
-                id=result.get("skripsi_id", result["id"]),
+                id=doc_id_str,
+                document_id=doc_id,
+                document_type=doc_type,
+                skripsi_id=doc_id if doc_type == "skripsi" else None,
                 similarity_score=score,
                 similarity_persen=format_persen(score),
                 level=get_similarity_level(score),

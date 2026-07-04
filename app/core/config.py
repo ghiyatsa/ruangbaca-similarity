@@ -17,14 +17,14 @@ class Settings(BaseSettings):
     )
 
     # ── Metadata ───────────────────────────────────────────────────────────────
-    PROJECT_NAME: str = "Skripsi Similarity API"
+    PROJECT_NAME: str = "RuangBaca Similarity API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     PORT: int = 8181
 
     # ── ChromaDB (vector store) ─────────────────────────────────────────────────
     CHROMA_DB_PATH: str = "./chroma_db"
-    COLLECTION_NAME: str = "skripsi_embeddings"
+    COLLECTION_NAME: str = "ruangbaca_embeddings"
 
     # ── Sentence-Transformers model ─────────────────────────────────────────────
     MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

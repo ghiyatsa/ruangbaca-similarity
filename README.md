@@ -10,10 +10,30 @@ API deteksi kemiripan judul skripsi berbasis FastAPI, Sentence Transformers, dan
 
 Repo ini sekarang memakai arsitektur `vector_only`:
 
-- Laravel/ruangbaca tetap menjadi source of truth data skripsi
-- FastAPI hanya menerima payload sinkronisasi, membuat embedding, dan menyimpan vector
-- SQLite lokal hanya dipakai untuk menyimpan status `sync_jobs`
-- Hasil similarity mengembalikan `id` sumber + skor, lalu detail data diambil lagi oleh Laravel
+- Laravel/ruangbaca tetap menjadi source of truth data skripsi.
+- FastAPI hanya menerima payload sinkronisasi, membuat embedding, dan menyimpan vector.
+- Hasil similarity mengembalikan `id` sumber + skor, lalu detail data diambil lagi oleh Laravel.
+
+---
+
+## 📘 Pedoman Laporan Kerja Praktik / Skripsi
+
+Repositori ini telah dilengkapi dengan panduan penulisan akademik untuk membantu penyusunan laporan Kerja Praktik (KP) atau Skripsi.
+
+👉 **[PANDUAN_LAPORAN.md](./PANDUAN_LAPORAN.md)**: Berisi draf Bab I hingga Bab V, penjelasan teori model (Sentence Transformers, ONNX), rumus perhitungan pembobotan judul/abstrak, format tabel pengujian *Confusion Matrix*, dan cara menguji akurasi model.
+
+### Peta Rujukan Komponen Repositori ke Laporan Akademik:
+
+| Bagian Laporan | Topik Pembahasan | File / Komponen Rujukan Utama |
+| :--- | :--- | :--- |
+| **Bab II (Landasan Teori)** | NLP Embeddings & Kuantisasi ONNX | [app/services/embedding_service.py](./app/services/embedding_service.py) |
+| **Bab III (Analisis & Desain)**| Arsitektur "Vector-Only" & Alur Data | Diagram Mermaid & [app/api/similarity.py](./app/api/similarity.py) |
+| **Bab III (Analisis & Desain)**| Rumus Pembobotan Kombinasi Vektor | Metode `encode_for_index` di [app/services/embedding_service.py](./app/services/embedding_service.py) |
+| **Bab IV (Implementasi)** | RESTful API Endpoints & FastAPI Router | [app/api/similarity.py](./app/api/similarity.py) & [app/api/sync.py](./app/api/sync.py) |
+| **Bab IV (Pengujian)** | Evaluasi Akurasi, Precision & Recall | [scripts/evaluate.py](./scripts/evaluate.py) |
+| **Bab IV (Pengujian)** | Agregasi Data & Statistik Distribusi | Endpoint `/stats` di [app/api/similarity.py](./app/api/similarity.py) |
+
+---
 
 ## Ringkasan Arsitektur
 
@@ -36,11 +56,13 @@ graph TD
     Laravel -->|POST /api/v1/sync/upsert| FastAPI
 ```
 
-- FastAPI melayani endpoint similarity dan sync
-- MySQL di Laravel menyimpan data skripsi utama
-- ChromaDB menyimpan embedding untuk semantic similarity
-- Model embedding lokal dibundel ke image dan dipakai dalam mode offline
-- Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan
+- FastAPI melayani endpoint similarity dan sync.
+- MySQL di Laravel menyimpan data skripsi utama.
+- ChromaDB menyimpan embedding untuk semantic similarity.
+- Model embedding lokal dibundel ke image dan dipakai dalam mode offline.
+- Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan.
+
+---
 
 ## Endpoint Utama
 
@@ -242,4 +264,3 @@ python scripts/evaluate.py --token <SYNC_SECRET> --threshold 0.70
 - tabel SQLite lama yang sebelumnya menyimpan cache data skripsi tidak lagi dipakai oleh aplikasi
 - metadata vector store lama yang masih menyimpan field tambahan tetap bisa terbaca
 - untuk merapikan metadata vector store agar mendapat metadata `program_studi` dan `tahun` secara bersih untuk endpoint `/stats`, jalankan reindex sekali setelah deploy versi ini
-
