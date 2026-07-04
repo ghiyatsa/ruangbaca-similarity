@@ -195,6 +195,47 @@ class EmbeddingService:
 
         return tuple(weight / total for weight in weights)
 
+    @staticmethod
+    def clean_title(title: str) -> str:
+        """
+        Membersihkan judul dari stopwords dan boilerplate akademik
+        agar perbandingan semantik terfokus pada konten substantif.
+        """
+        if not title:
+            return ""
+        
+        # Lowercase
+        text = title.lower()
+        
+        # Hapus karakter non-alfanumerik (pertahankan huruf dan angka)
+        import re
+        text = re.sub(r'[^a-z0-9\s]', ' ', text)
+        
+        # Daftar kata penghubung dan boilerplate akademik yang diabaikan
+        stopwords = {
+            # Bahasa Indonesia
+            'dan', 'yang', 'untuk', 'pada', 'dengan', 'dari', 'ke', 'di', 'ini', 'itu', 'atau',
+            'sebagai', 'dalam', 'tentang', 'oleh', 'adalah', 'adapun', 'serta', 'sebuah', 'ia', 'juga',
+            # Boilerplate akademik
+            'rancang', 'bangun', 'sistem', 'aplikasi', 'metode', 'studi', 'kasus', 'algoritma',
+            'perancangan', 'pembuatan', 'penerapan', 'berbasis', 'menggunakan', 'analisis', 
+            'implementasi', 'uji', 'kinerja', 'evaluasi', 'pengembangan', 'model', 'rancangan', 
+            'prototipe', 'prototype', 'berbasiskan', 'mengimplementasikan', 'menganalisis', 'berupa',
+            'laporan', 'tugas', 'akhir', 'skripsi', 'kerja', 'praktek', 'praktik', 'kp',
+            # Bahasa Inggris
+            'of', 'the', 'and', 'in', 'on', 'for', 'with', 'a', 'an', 'to', 'based', 'using', 'system'
+        }
+        
+        words = text.split()
+        filtered = [w for w in words if w not in stopwords and len(w) >= 3]
+        
+        # Jika hasil filter kosong (misal judul sangat pendek / semua kata adalah stopwords), 
+        # kembalikan teks asli agar tidak menghasilkan embedding kosong.
+        if not filtered:
+            return title.strip()
+            
+        return ' '.join(filtered)
+
     async def encode_for_index(
         self,
         judul: str,
@@ -217,7 +258,7 @@ class EmbeddingService:
             bobot_abstrak=bobot_abstrak,
             bobot_kata_kunci=bobot_kata_kunci,
         )
-        v_judul = await self._encode_single(judul.strip())
+        v_judul = await self._encode_single(self.clean_title(judul))
 
         combined_v = v_judul * weight_judul
 
@@ -244,7 +285,7 @@ class EmbeddingService:
         """Query selalu menggunakan judul saja."""
         if not self.is_loaded:
             await self.load_model()
-        return await self._encode_single(judul.strip())
+        return await self._encode_single(self.clean_title(judul))
 
     async def encode_batch_for_index(self, items: List[tuple]) -> np.ndarray:
         """
@@ -262,7 +303,7 @@ class EmbeddingService:
         for j, a, k, weight_j, weight_a, weight_k in items:
             # Kita simpan index untuk rekonstruksi nanti
             idx_judul = len(all_texts)
-            all_texts.append(j.strip())
+            all_texts.append(self.clean_title(j))
             
             idx_abstrak = -1
             if a:
@@ -283,7 +324,6 @@ class EmbeddingService:
                 bobot_abstrak=weight_a,
                 bobot_kata_kunci=weight_k,
             )))
-
         # 2. Batch encode semua teks
         all_embeddings = await self._encode_batch(all_texts)
 
