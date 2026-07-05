@@ -57,11 +57,16 @@ def _deserialize_payload(payload_json: str) -> tuple[List[SyncItem], bool]:
     ], bool(payload.get("reset_index", False))
 
 
+_bulk_sync_lock = asyncio.Lock()
+
+
 async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
     embedding_service = app_state.embedding_service
     vector_store = app_state.vector_store
 
-    logger.info("Bulk-upsert job dimulai: %s", job_id)
+    logger.info("Bulk-upsert job dimasukkan ke antrean: %s", job_id)
+    async with _bulk_sync_lock:
+        logger.info("Bulk-upsert job dimulai: %s", job_id)
 
     job = await SyncJobRepository.find_by_id(job_id)
 
