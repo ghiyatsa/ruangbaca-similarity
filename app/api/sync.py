@@ -68,77 +68,77 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
     async with _bulk_sync_lock:
         logger.info("Bulk-upsert job dimulai: %s", job_id)
 
-    job = await SyncJobRepository.find_by_id(job_id)
+        job = await SyncJobRepository.find_by_id(job_id)
 
-    if job is None:
-        logger.warning("Bulk-upsert job tidak ditemukan: %s", job_id)
-        return
+        if job is None:
+            logger.warning("Bulk-upsert job tidak ditemukan: %s", job_id)
+            return
 
-    payload_json = job.__dict__.get("_payload_json", "{}")
-    items, reset_index = _deserialize_payload(payload_json)
-    await SyncJobRepository.mark_processing(job)
+        payload_json = job.__dict__.get("_payload_json", "{}")
+        items, reset_index = _deserialize_payload(payload_json)
+        await SyncJobRepository.mark_processing(job)
 
-    processed = 0
-    expected_total = len({item.document_id for item in items})
+        processed = 0
+        expected_total = len({item.document_id for item in items})
 
-    try:
-        if reset_index:
-            await vector_store.reset()
-            logger.info("Bulk-upsert job %s menjalankan reset penuh sebelum reindex.", job_id)
+        try:
+            if reset_index:
+                await vector_store.reset()
+                logger.info("Bulk-upsert job %s menjalankan reset penuh sebelum reindex.", job_id)
 
-        for chunk in _chunked(items, settings.BULK_SYNC_CHUNK_SIZE):
-            items_for_encode = [
-                (
-                    item.judul,
-                    item.abstrak,
-                    item.kata_kunci,
-                    item.bobot_judul,
-                    item.bobot_abstrak,
-                    item.bobot_kata_kunci,
+            for chunk in _chunked(items, settings.BULK_SYNC_CHUNK_SIZE):
+                items_for_encode = [
+                    (
+                        item.judul,
+                        item.abstrak,
+                        item.kata_kunci,
+                        item.bobot_judul,
+                        item.bobot_abstrak,
+                        item.bobot_kata_kunci,
+                    )
+                    for item in chunk
+                ]
+                embeddings = await embedding_service.encode_batch_for_index(items_for_encode)
+
+                ids = [item.document_id for item in chunk]
+                metadatas = [build_metadata(item) for item in chunk]
+                documents = [item.judul for item in chunk]
+                await vector_store.upsert_batch(ids, embeddings, metadatas, documents=documents)
+
+                processed += len(chunk)
+
+                job = await SyncJobRepository.find_by_id(job_id)
+                if job is not None:
+                    await SyncJobRepository.update_progress(job, processed)
+
+            total_indexed = await vector_store.count()
+
+            if reset_index:
+                if total_indexed != expected_total:
+                    raise RuntimeError(
+                        "Jumlah vector hasil reindex tidak konsisten "
+                        f"(expected={expected_total}, vector={total_indexed})."
+                    )
+            elif total_indexed < expected_total:
+                raise RuntimeError(
+                    "Jumlah vector terindeks lebih kecil dari data yang diterima "
+                    f"(received={expected_total}, vector={total_indexed})."
                 )
-                for item in chunk
-            ]
-            embeddings = await embedding_service.encode_batch_for_index(items_for_encode)
-
-            ids = [item.document_id for item in chunk]
-            metadatas = [build_metadata(item) for item in chunk]
-            documents = [item.judul for item in chunk]
-            await vector_store.upsert_batch(ids, embeddings, metadatas, documents=documents)
-
-            processed += len(chunk)
 
             job = await SyncJobRepository.find_by_id(job_id)
             if job is not None:
-                await SyncJobRepository.update_progress(job, processed)
+                await SyncJobRepository.mark_completed(job)
 
-        total_indexed = await vector_store.count()
+            # Update dynamic stopwords setelah sinkronisasi massal selesai
+            await embedding_service.update_dynamic_stopwords(vector_store)
 
-        if reset_index:
-            if total_indexed != expected_total:
-                raise RuntimeError(
-                    "Jumlah vector hasil reindex tidak konsisten "
-                    f"(expected={expected_total}, vector={total_indexed})."
-                )
-        elif total_indexed < expected_total:
-            raise RuntimeError(
-                "Jumlah vector terindeks lebih kecil dari data yang diterima "
-                f"(received={expected_total}, vector={total_indexed})."
-            )
+            logger.info("Bulk-upsert job selesai: %s", job_id)
+        except Exception as exception:
+            logger.exception("Bulk-upsert job gagal: %s", job_id)
 
-        job = await SyncJobRepository.find_by_id(job_id)
-        if job is not None:
-            await SyncJobRepository.mark_completed(job)
-
-        # Update dynamic stopwords setelah sinkronisasi massal selesai
-        await embedding_service.update_dynamic_stopwords(vector_store)
-
-        logger.info("Bulk-upsert job selesai: %s", job_id)
-    except Exception as exception:
-        logger.exception("Bulk-upsert job gagal: %s", job_id)
-
-        job = await SyncJobRepository.find_by_id(job_id)
-        if job is not None:
-            await SyncJobRepository.mark_failed(job, str(exception))
+            job = await SyncJobRepository.find_by_id(job_id)
+            if job is not None:
+                await SyncJobRepository.mark_failed(job, str(exception))
 
 
 async def resume_unfinished_jobs(app_state) -> None:
