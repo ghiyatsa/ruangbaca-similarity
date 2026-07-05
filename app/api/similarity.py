@@ -8,6 +8,7 @@ from collections import Counter
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.core.config import settings
 from app.core.limiter import limiter
 from app.schemas.document import (
     SimilarityCheckRequest,
