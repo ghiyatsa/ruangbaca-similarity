@@ -56,8 +56,23 @@ async def check_similarity(
 
     results: list[SimilarResult] = []
     for result in raw_results:
-        score = result["similarity_score"]
-        if score < body.threshold:
+        # Calculate Jaccard lexical similarity of cleaned titles
+        db_title = result.get("document", "")
+        cleaned_query = embedding_service.clean_title(body.judul)
+        cleaned_db = embedding_service.clean_title(db_title)
+        
+        words_query = set(cleaned_query.split())
+        words_db = set(cleaned_db.split())
+        
+        jaccard_score = 0.0
+        if words_query or words_db:
+            jaccard_score = len(words_query.intersection(words_db)) / len(words_query.union(words_db))
+            
+        semantic_score = result["similarity_score"]
+        hybrid_score = (settings.HYBRID_SEMANTIC_WEIGHT * semantic_score) + (settings.HYBRID_LEXICAL_WEIGHT * jaccard_score)
+        hybrid_score = round(hybrid_score, 4)
+
+        if hybrid_score < body.threshold:
             continue
 
         doc_id_str = result.get("document_id", str(result["id"]))
@@ -79,11 +94,14 @@ async def check_similarity(
                 document_id=doc_id,
                 document_type=doc_type,
                 skripsi_id=doc_id if doc_type == "skripsi" else None,
-                similarity_score=score,
-                similarity_persen=format_persen(score),
-                level=get_similarity_level(score),
+                similarity_score=hybrid_score,
+                similarity_persen=format_persen(hybrid_score),
+                level=get_similarity_level(hybrid_score),
             )
         )
+
+    # Sort results by hybrid_score descending just in case Jaccard shifted order
+    results.sort(key=lambda x: x.similarity_score, reverse=True)
 
     peringatan: str | None = None
     if results and results[0].similarity_score >= 0.85:
@@ -125,14 +143,30 @@ async def compare_two(
 
     emb_a = await embedding_service.encode_for_query(judul_a)
     emb_b = await embedding_service.encode_for_query(judul_b)
-    score = embedding_service.cosine_similarity(emb_a, emb_b)
+    score_semantic = embedding_service.cosine_similarity(emb_a, emb_b)
+
+    cleaned_a = embedding_service.clean_title(judul_a)
+    cleaned_b = embedding_service.clean_title(judul_b)
+    words_a = set(cleaned_a.split())
+    words_b = set(cleaned_b.split())
+    
+    jaccard_score = 0.0
+    if words_a or words_b:
+        jaccard_score = len(words_a.intersection(words_b)) / len(words_a.union(words_b))
+
+    score_hybrid = (settings.HYBRID_SEMANTIC_WEIGHT * score_semantic) + (settings.HYBRID_LEXICAL_WEIGHT * jaccard_score)
+    score_hybrid = round(score_hybrid, 4)
 
     return {
         "judul_a": judul_a,
         "judul_b": judul_b,
-        "similarity_score": round(score, 4),
-        "similarity_persen": format_persen(score),
-        "level": get_similarity_level(score),
+        "similarity_score": score_hybrid,
+        "similarity_persen": format_persen(score_hybrid),
+        "level": get_similarity_level(score_hybrid),
+        "detail": {
+            "semantic_score": round(score_semantic, 4),
+            "lexical_score": round(jaccard_score, 4)
+        }
     }
 
 

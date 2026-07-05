@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     WEIGHT_ABSTRAK: float = 0.2
     WEIGHT_KATA_KUNCI: float = 0.1
 
+    # ── Hybrid Similarity (Semantic + Lexical) ──────────────────────────────────
+    HYBRID_SEMANTIC_WEIGHT: float = 0.7
+    HYBRID_LEXICAL_WEIGHT: float = 0.3
+
     # ── CORS ────────────────────────────────────────────────────────────────────
     # Gunakan str agar pydantic-settings tidak mencoba JSON-decode nilai dari .env.
     # Gunakan property `allowed_origins_list` untuk mendapat List[str].

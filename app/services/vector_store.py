@@ -114,7 +114,7 @@ class VectorStore:
         query_params = {
             "query_embeddings": [query_embedding.tolist()],
             "n_results": n_results,
-            "include": ["metadatas", "distances"],
+            "include": ["metadatas", "distances", "documents"],
         }
         if document_type:
             query_params["where"] = {"document_type": document_type}
@@ -132,10 +132,12 @@ class VectorStore:
             distance   = results["distances"][0][i]
             similarity = round(1.0 - distance, 4)
             metadata   = results["metadatas"][0][i]
+            document   = results["documents"][0][i] if results.get("documents") and i < len(results["documents"][0]) else ""
 
             output.append({
                 "id": doc_id,
                 "similarity_score": similarity,
+                "document": document,
                 **metadata,
             })
 
