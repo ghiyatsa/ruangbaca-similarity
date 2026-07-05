@@ -97,7 +97,8 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
 
             ids = [item.document_id for item in chunk]
             metadatas = [build_metadata(item) for item in chunk]
-            await vector_store.upsert_batch(ids, embeddings, metadatas)
+            documents = [item.judul for item in chunk]
+            await vector_store.upsert_batch(ids, embeddings, metadatas, documents=documents)
 
             processed += len(chunk)
 
@@ -122,6 +123,9 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
         job = await SyncJobRepository.find_by_id(job_id)
         if job is not None:
             await SyncJobRepository.mark_completed(job)
+
+        # Update dynamic stopwords setelah sinkronisasi massal selesai
+        await embedding_service.update_dynamic_stopwords(vector_store)
 
         logger.info("Bulk-upsert job selesai: %s", job_id)
     except Exception as exception:
@@ -172,7 +176,11 @@ async def upsert_one(
         skripsi_id=body.document_id,
         embedding=embedding,
         metadata=build_metadata(body),
+        document=body.judul,
     )
+
+    # Update dynamic stopwords setelah single upsert selesai
+    await embedding_service.update_dynamic_stopwords(vector_store)
 
     logger.info("Upsert dokumen document_id=%s selesai.", body.document_id)
     return SyncResponse(

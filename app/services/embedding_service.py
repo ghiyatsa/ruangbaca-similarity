@@ -195,8 +195,7 @@ class EmbeddingService:
 
         return tuple(weight / total for weight in weights)
 
-    @staticmethod
-    def clean_title(title: str) -> str:
+    def clean_title(self, title: str) -> str:
         """
         Membersihkan judul dari stopwords dan boilerplate akademik
         agar perbandingan semantik terfokus pada konten substantif.
@@ -227,7 +226,10 @@ class EmbeddingService:
         }
         
         words = text.split()
-        filtered = [w for w in words if w not in stopwords and len(w) >= 3]
+        # Ambil dynamic_stopwords jika ada, jika tidak default ke set kosong
+        dynamic_stopwords = getattr(self, "dynamic_stopwords", set())
+        all_stopwords = stopwords.union(dynamic_stopwords)
+        filtered = [w for w in words if w not in all_stopwords and len(w) >= 3]
         
         # Jika hasil filter kosong (misal judul sangat pendek / semua kata adalah stopwords), 
         # kembalikan teks asli agar tidak menghasilkan embedding kosong.
@@ -235,6 +237,53 @@ class EmbeddingService:
             return title.strip()
             
         return ' '.join(filtered)
+
+    async def update_dynamic_stopwords(self, vector_store: "VectorStore", threshold: Optional[float] = None) -> None:
+        """
+        Hitung frekuensi kata di seluruh dokumen dan tentukan kata yang terlalu umum
+        sebagai dynamic stopwords secara otomatis.
+        """
+        try:
+            if threshold is None:
+                threshold = settings.DYNAMIC_STOPWORDS_THRESHOLD
+
+            titles = await vector_store.fetch_all_titles()
+            if not titles:
+                self.dynamic_stopwords = set()
+                return
+
+            import re
+            from collections import Counter
+
+            def _calculate_df():
+                word_counts = Counter()
+                for title in titles:
+                    # Ambil kata unik per dokumen untuk menghitung Document Frequency (DF)
+                    words = set(re.findall(r'[a-z0-9]{3,}', title.lower()))
+                    for w in words:
+                        word_counts[w] += 1
+                return word_counts
+
+            loop = asyncio.get_running_loop()
+            word_counts = await loop.run_in_executor(None, _calculate_df)
+            total_docs = len(titles)
+
+            new_dynamic = set()
+            for word, count in word_counts.items():
+                df = count / total_docs
+                if df >= threshold:
+                    new_dynamic.add(word)
+
+            self.dynamic_stopwords = new_dynamic
+            logger.info(
+                "Dynamic stopwords diperbarui: %d kata terdeteksi (threshold=%.2f, total_docs=%d). Kata umum: %s",
+                len(new_dynamic),
+                threshold,
+                total_docs,
+                list(new_dynamic)[:15]
+            )
+        except Exception as exc:
+            logger.exception("Gagal memperbarui dynamic stopwords: %s", exc)
 
     async def encode_for_index(
         self,

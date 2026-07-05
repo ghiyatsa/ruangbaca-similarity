@@ -35,6 +35,9 @@ async def lifespan(app: FastAPI):
     app.state.embedding_service = embedding_service
     app.state.vector_store = vector_store
 
+    logger.info("Memperbarui dynamic stopwords dari database...")
+    await embedding_service.update_dynamic_stopwords(vector_store)
+
     await sync.resume_unfinished_jobs(app.state)
 
     yield

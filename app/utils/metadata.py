@@ -14,5 +14,6 @@ def build_metadata(source: SyncItem) -> dict:
         "skripsi_id": source.skripsi_id,
         "tahun": source.tahun if source.tahun else 0,
         "program_studi": source.program_studi if source.program_studi else "Tidak Diketahui",
+        "judul": source.judul,
     }
 

@@ -57,13 +57,19 @@ class VectorStore:
         skripsi_id: int,
         embedding: np.ndarray,
         metadata: dict,
+        document: Optional[str] = None,
     ) -> None:
         """Tambah atau perbarui satu embedding."""
+        kwargs = {
+            "ids": [str(skripsi_id)],
+            "embeddings": [embedding.tolist()],
+            "metadatas": [metadata],
+        }
+        if document is not None:
+            kwargs["documents"] = [document]
         await self._run(
             self.collection.upsert,
-            ids=[str(skripsi_id)],
-            embeddings=[embedding.tolist()],
-            metadatas=[metadata],
+            **kwargs
         )
 
     async def upsert_batch(
@@ -71,13 +77,19 @@ class VectorStore:
         skripsi_ids: List[int],
         embeddings: np.ndarray,
         metadatas: List[dict],
+        documents: Optional[List[str]] = None,
     ) -> None:
         """Tambah atau perbarui banyak embedding sekaligus."""
+        kwargs = {
+            "ids": [str(sid) for sid in skripsi_ids],
+            "embeddings": embeddings.tolist(),
+            "metadatas": metadatas,
+        }
+        if documents is not None:
+            kwargs["documents"] = documents
         await self._run(
             self.collection.upsert,
-            ids=[str(sid) for sid in skripsi_ids],
-            embeddings=embeddings.tolist(),
-            metadatas=metadatas,
+            **kwargs
         )
 
     # ── Pembacaan ──────────────────────────────────────────────────────────────
@@ -162,3 +174,29 @@ class VectorStore:
     async def count(self) -> int:
         """Jumlah embedding yang tersimpan."""
         return await self._run(self.collection.count)
+
+    async def fetch_all_titles(self) -> List[str]:
+        """Ambil semua judul dari ChromaDB (baik dari documents atau metadatas)."""
+        count = await self.count()
+        if count == 0:
+            return []
+        
+        # Ambil semua data. Untuk skalabilitas, kita batasi sampai 50.000 data.
+        results = await self._run(
+            self.collection.get,
+            limit=50000,
+            include=["documents", "metadatas"]
+        )
+        
+        titles = []
+        # Coba ambil dari documents dulu
+        if results.get("documents"):
+            titles = [doc for doc in results["documents"] if doc]
+        
+        # Jika kosong atau tidak lengkap, fallback ke metadatas
+        if not titles and results.get("metadatas"):
+            for meta in results["metadatas"]:
+                if meta and "judul" in meta:
+                    titles.append(meta["judul"])
+                    
+        return titles

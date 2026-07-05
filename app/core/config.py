@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # ── Sentence-Transformers model ─────────────────────────────────────────────
     MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     ABSTRAK_MAX_CHARS: int = 300
+    DYNAMIC_STOPWORDS_THRESHOLD: float = 0.15
 
     # ── Weighting Similarity ──────────────────────────────────────────────────
     # Total bobot disarankan berjumlah 1.0
