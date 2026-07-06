@@ -4,19 +4,18 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    container_name: skripsi-similarity-api
+    container_name: ruangbaca-similarity-api
     restart: unless-stopped
     ports:
       - "8181:7860"
 
     environment:
       PORT: "7860"
-      DATABASE_URL: "sqlite+aiosqlite:////data/skripsi.db"
       CHROMA_DB_PATH: "/data/chroma_db"
       COLLECTION_NAME: "skripsi_embeddings"
       MODEL_NAME: "paraphrase-multilingual-MiniLM-L12-v2"
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
       HF_HOME: "/data/.huggingface"
       ALLOWED_ORIGINS: "http://localhost:8000"
       OMP_NUM_THREADS: "1"

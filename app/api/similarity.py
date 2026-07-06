@@ -15,7 +15,7 @@ from app.schemas.document import (
     SimilarityCheckResponse,
     SimilarResult,
 )
-from app.utils.similarity import format_persen, get_similarity_level
+from app.utils.similarity import calculate_jaccard, format_persen, get_similarity_level
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -62,12 +62,7 @@ async def check_similarity(
         cleaned_query = embedding_service.clean_title(body.judul)
         cleaned_db = embedding_service.clean_title(db_title)
         
-        words_query = set(cleaned_query.split())
-        words_db = set(cleaned_db.split())
-        
-        jaccard_score = 0.0
-        if words_query or words_db:
-            jaccard_score = len(words_query.intersection(words_db)) / len(words_query.union(words_db))
+        jaccard_score = calculate_jaccard(cleaned_query, cleaned_db)
             
         semantic_score = result["similarity_score"]
         hybrid_score = (settings.HYBRID_SEMANTIC_WEIGHT * semantic_score) + (settings.HYBRID_LEXICAL_WEIGHT * jaccard_score)
@@ -134,7 +129,7 @@ async def check_similarity(
         "Endpoint ini berguna untuk evaluasi cepat atau debugging bobot/model."
     ),
 )
-@limiter.limit("20/minute")
+@limiter.limit("200/minute")
 async def compare_two(
     request: Request,
     judul_a: str,
@@ -148,12 +143,7 @@ async def compare_two(
 
     cleaned_a = embedding_service.clean_title(judul_a)
     cleaned_b = embedding_service.clean_title(judul_b)
-    words_a = set(cleaned_a.split())
-    words_b = set(cleaned_b.split())
-    
-    jaccard_score = 0.0
-    if words_a or words_b:
-        jaccard_score = len(words_a.intersection(words_b)) / len(words_a.union(words_b))
+    jaccard_score = calculate_jaccard(cleaned_a, cleaned_b)
 
     score_hybrid = (settings.HYBRID_SEMANTIC_WEIGHT * score_semantic) + (settings.HYBRID_LEXICAL_WEIGHT * jaccard_score)
     score_hybrid = round(score_hybrid, 4)

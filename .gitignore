@@ -13,3 +13,24 @@ skripsi.db-journal
 
 .idea/
 .vscode/
+
+# Local raw datasets (keamanan data mahasiswa)
+data/data-skripsi.csv
+data/data-laporan-kp.csv
+*.json
+
+# Ignore local academic guide
+PANDUAN_LAPORAN.md
+
+# Local model folder & ONNX output
+models_onnx/
+model/
+model_cache/
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+
+# Logs & cache
+*.log
+.pytest_cache/

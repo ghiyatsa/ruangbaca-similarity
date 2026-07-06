@@ -45,8 +45,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Model & HF cache stored on persistent /data volume
     HF_HOME=/data/.huggingface \
     SENTENCE_TRANSFORMERS_HOME=/data/.huggingface \
-    # SQLite & ChromaDB on persistent /data volume
-    DATABASE_URL=sqlite+aiosqlite:////data/skripsi.db \
+    # ChromaDB on persistent /data volume
     CHROMA_DB_PATH=/data/chroma_db \
     # Allow online model download at runtime
     HF_HUB_OFFLINE=0 \

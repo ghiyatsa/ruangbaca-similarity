@@ -6,68 +6,19 @@ serta membandingkan cosine similarity menggunakan skenario judul mirip/sinonim.
 Hasil evaluasi ini siap digunakan untuk isi Bab 4/Bab 5 Laporan Skripsi.
 """
 import argparse
+import csv
 import sys
 import time
 import requests
 
-# Dataset uji evaluasi (Judul A, Judul B, Label Kemiripan Sebenarnya/Ground Truth)
-# 1 = Mirip/Duplikat secara topik, 0 = Berbeda topik/Tidak Mirip
-TEST_DATASET = [
-    # Pasangan Judul Mirip (Sinonim / Parafrase) - Harus dideteksi tinggi
-    {
-        "judul_a": "Penerapan Algoritma K-Means untuk Klasterisasi Data Mahasiswa",
-        "judul_b": "Klasterisasi Mahasiswa Menggunakan Metode K-Means",
-        "ground_truth": 1
-    },
-    {
-        "judul_a": "Sistem Rekomendasi Wisata dengan Metode Collaborative Filtering",
-        "judul_b": "Implementasi Collaborative Filtering Pada Sistem Rekomendasi Tempat Wisata",
-        "ground_truth": 1
-    },
-    {
-        "judul_a": "Analisis Sentimen Opini Publik Menggunakan Naive Bayes Classifier",
-        "judul_b": "Klasifikasi Sentimen Opini Masyarakat dengan Metode Naive Bayes",
-        "ground_truth": 1
-    },
-    {
-        "judul_a": "Rancang Bangun Aplikasi E-Commerce Berbasis Mobile Android",
-        "judul_b": "Pengembangan Aplikasi Penjualan Online Menggunakan Android Mobile",
-        "ground_truth": 1
-    },
-    {
-        "judul_a": "Sistem Deteksi Penyakit Padi Menggunakan Convolutional Neural Network",
-        "judul_b": "Klasifikasi Citra Penyakit Tanaman Padi Berbasis CNN",
-        "ground_truth": 1
-    },
-    # Pasangan Judul Berbeda (Negatif Palsu) - Harus dideteksi rendah
-    {
-        "judul_a": "Sistem Rekomendasi Wisata dengan Metode Collaborative Filtering",
-        "judul_b": "Analisis Sentimen Opini Publik Menggunakan Naive Bayes Classifier",
-        "ground_truth": 0
-    },
-    {
-        "judul_a": "Klasifikasi Citra Penyakit Tanaman Padi Berbasis CNN",
-        "judul_b": "Implementasi K-Means untuk Pengelompokan Tingkat Kemiskinan",
-        "ground_truth": 0
-    },
-    {
-        "judul_a": "Rancang Bangun Aplikasi E-Commerce Berbasis Mobile Android",
-        "judul_b": "Analisis Perbandingan Kecepatan Algoritma Sorting pada Java",
-        "ground_truth": 0
-    },
-    {
-        "judul_a": "Penerapan Algoritma K-Means untuk Klasterisasi Data Mahasiswa",
-        "judul_b": "Pengembangan Game Edukasi Pengenalan Huruf Hijaiyah Menggunakan Unity",
-        "ground_truth": 0
-    },
-    {
-        "judul_a": "Sistem Deteksi Penyakit Padi Menggunakan Convolutional Neural Network",
-        "judul_b": "Rancang Bangun Sistem Keamanan Jaringan Menggunakan Firewall",
-        "ground_truth": 0
-    }
-]
+## 1 = Mirip/Duplikat secara topik, 0 = Berbeda topik/Tidak Mirip
 
-def run_evaluation(api_url: str, token: str, threshold: float = 0.70):
+
+def run_evaluation(api_url: str, token: str, threshold: float = 0.70, csv_path: str = None):
+    if not csv_path:
+        print("Error: Parameter --csv wajib disertakan (contoh: eval-skripsi.csv atau eval-laporan-kp.csv)")
+        sys.exit(1)
+
     base = api_url.rstrip("/")
     session = requests.Session()
     session.headers["Authorization"] = f"Bearer {token}"
@@ -82,6 +33,60 @@ def run_evaluation(api_url: str, token: str, threshold: float = 0.70):
     except Exception as exc:
         print(f"Gagal menghubungkan ke API: {exc}")
         sys.exit(1)
+
+    print(f"Membaca dataset uji dari: {csv_path}")
+    dataset = []
+    try:
+        with open(csv_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+            # Cek apakah ini file mentah (seperti data-skripsi.csv atau data-laporan-kp.csv)
+            if headers and "Judul" in headers:
+                rows = list(reader)
+                import random
+                random.seed(42) # Agar hasil pengujian reproducible
+                
+                # Fungsi pembantu untuk mengacak urutan kata
+                def _perturb(t: str) -> str:
+                    w = t.split()
+                    if len(w) > 3:
+                        w[1], w[2] = w[2], w[1]
+                    return " ".join(w)
+
+                # 1. Pasangan Positif (Judul vs Diri Sendiri / Judul Teracak) -> GT = 1
+                for row in rows[:10]:
+                    judul = row["Judul"].strip()
+                    if judul:
+                        dataset.append({"judul_a": judul, "judul_b": judul, "ground_truth": 1})
+                for row in rows[10:20]:
+                    judul = row["Judul"].strip()
+                    if judul:
+                        dataset.append({"judul_a": judul, "judul_b": _perturb(judul), "ground_truth": 1})
+
+                # 2. Pasangan Negatif (Judul A vs Judul B Acak yang berbeda) -> GT = 0
+                neg_count = 0
+                while neg_count < 20 and len(rows) > 1:
+                    r1 = random.choice(rows)
+                    r2 = random.choice(rows)
+                    j1 = r1["Judul"].strip()
+                    j2 = r2["Judul"].strip()
+                    if j1 != j2:
+                        dataset.append({"judul_a": j1, "judul_b": j2, "ground_truth": 0})
+                        neg_count += 1
+                
+                print(f"Dataset mentah terdeteksi. Membuat {len(dataset)} pasangan uji dinamis (20 positif, 20 negatif).")
+            else:
+                # Dataset uji kustom berformat judul_a, judul_b, ground_truth
+                for row in reader:
+                    dataset.append({
+                        "judul_a": row["judul_a"],
+                        "judul_b": row["judul_b"],
+                        "ground_truth": int(row["ground_truth"])
+                    })
+        print(f"Berhasil memuat {len(dataset)} pasangan uji.")
+    except Exception as exc:
+        print(f"Gagal membaca file CSV dataset: {exc}")
+        sys.exit(1)
     
     print(f"============================================================")
     print(f"MEMULAI EVALUASI AKURASI DENGAN THRESHOLD = {threshold}")
@@ -95,7 +100,7 @@ def run_evaluation(api_url: str, token: str, threshold: float = 0.70):
     print(f"{'No':<3} | {'Skor':<6} | {'Prediksi':<8} | {'GroundTruth':<11} | {'Hasil Evaluasi':<15}")
     print(f"-" * 70)
 
-    for i, data in enumerate(TEST_DATASET, start=1):
+    for i, data in enumerate(dataset, start=1):
         try:
             response = session.post(
                 f"{base}/api/v1/similarity/compare",
@@ -133,12 +138,12 @@ def run_evaluation(api_url: str, token: str, threshold: float = 0.70):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    accuracy = (tp + tn) / len(TEST_DATASET)
+    accuracy = (tp + tn) / len(dataset)
 
     print(f"\n============================================================")
     print(f"METRIK EVALUASI AKURASI SISTEM")
     print(f"============================================================")
-    print(f"Jumlah Data Uji : {len(TEST_DATASET)}")
+    print(f"Jumlah Data Uji : {len(dataset)}")
     print(f"True Positive   : {tp}")
     print(f"False Positive  : {fp}")
     print(f"True Negative   : {tn}")
@@ -171,8 +176,13 @@ def main():
         default=0.70,
         help="Batas minimum nilai cosine similarity untuk dikatakan mirip (default: 0.70)",
     )
+    parser.add_argument(
+        "--csv",
+        required=True,
+        help="Path ke file CSV dataset uji (contoh: eval-skripsi.csv atau eval-laporan-kp.csv)",
+    )
     args = parser.parse_args()
-    run_evaluation(args.url, args.token, args.threshold)
+    run_evaluation(args.url, args.token, args.threshold, args.csv)
 
 if __name__ == "__main__":
     main()
