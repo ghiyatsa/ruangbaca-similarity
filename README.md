@@ -6,160 +6,157 @@ app_port: 7860
 
 # RuangBaca Similarity API
 
-API deteksi kemiripan judul skripsi dan laporan kerja praktek berbasis FastAPI, Sentence Transformers, dan ChromaDB.
+Semantic similarity microservice untuk deteksi kemiripan dokumen akademik berbasis **FastAPI**, **Sentence Transformers**, dan **ChromaDB**.
 
-Repo ini memakai arsitektur `vector_only`:
-
-- Laravel/ruangbaca tetap menjadi source of truth data skripsi dan laporan kerja praktek.
-- FastAPI hanya menerima payload sinkronisasi, membuat embedding, dan menyimpan vector.
-- Hasil similarity mengembalikan `document_id`, `document_type`, dan skor kemiripan, lalu detail data diambil lagi oleh Laravel.
-
----
-
-## 📘 Pedoman Laporan Kerja Praktik / Skripsi
-
-Repositori ini telah dilengkapi dengan panduan penulisan akademik untuk membantu penyusunan laporan Kerja Praktik (KP) atau Skripsi.
-
-👉 **[PANDUAN_LAPORAN.md](./PANDUAN_LAPORAN.md)**: Berisi draf Bab I hingga Bab V, penjelasan teori model (Sentence Transformers, ONNX), rumus perhitungan pembobotan judul/abstrak, format tabel pengujian *Confusion Matrix*, dan cara menguji akurasi model.
-
-### Peta Rujukan Komponen Repositori ke Laporan Akademik:
-
-| Bagian Laporan | Topik Pembahasan | File / Komponen Rujukan Utama |
-| :--- | :--- | :--- |
-| **Bab II (Landasan Teori)** | NLP Embeddings & Kuantisasi ONNX | [app/services/embedding_service.py](./app/services/embedding_service.py) |
-| **Bab III (Analisis & Desain)**| Arsitektur "Vector-Only" & Alur Data | Diagram Mermaid & [app/api/similarity.py](./app/api/similarity.py) |
-| **Bab III (Analisis & Desain)**| Rumus Pembobotan Kombinasi Vektor | Metode `encode_for_index` di [app/services/embedding_service.py](./app/services/embedding_service.py) |
-| **Bab IV (Implementasi)** | RESTful API Endpoints & FastAPI Router | [app/api/similarity.py](./app/api/similarity.py) & [app/api/sync.py](./app/api/sync.py) |
-| **Bab IV (Pengujian)** | Evaluasi Akurasi, Precision & Recall | [scripts/evaluate.py](./scripts/evaluate.py) |
-| **Bab IV (Pengujian)** | Agregasi Data & Statistik Distribusi | Endpoint `/stats` di [app/api/similarity.py](./app/api/similarity.py) |
+![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?logo=fastapi)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-1.5-orange)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)
 
 ---
 
-## Ringkasan Arsitektur
+## Arsitektur
+
+Service ini menggunakan arsitektur **vector-only**:
+
+- **Laravel** tetap menjadi *source of truth* — semua data skripsi dan laporan KP tersimpan di MySQL.
+- **FastAPI** hanya menerima payload sinkronisasi, menghasilkan embedding, dan menyimpan vector.
+- Hasil similarity hanya mengembalikan `document_id`, `document_type`, dan skor — detail data tetap diambil oleh Laravel.
 
 ```mermaid
 graph TD
-    User([Pengguna / Mahasiswa]) -->|Input Judul Baru| Laravel[Laravel: ruangbaca]
+    User([Pengguna]) -->|Input Judul| Laravel[Laravel: ruangbaca]
     Laravel -->|POST /api/v1/similarity/check| FastAPI[FastAPI Similarity API]
-    
-    FastAPI -->|1. Generate Embedding| Model[Sentence Transformers / ONNX Model]
+
+    FastAPI -->|1. Generate Embedding| Model[Sentence Transformers / ONNX]
     FastAPI -->|2. Cosine Similarity Query| ChromaDB[(ChromaDB Vector Store)]
-    
-    ChromaDB -->|Kembalikan Top K Serupa| FastAPI
-    FastAPI -->|Kembalikan Daftar ID, Tipe, & Skor| Laravel
-    
-    Laravel -->|Query Detail Data ke DB| MySQL[(MySQL Database)]
-    Laravel -->|Tampilkan Hasil Analisis Kemiripan| User
-    
-    %% Alur Sinkronisasi (Data Sync)
-    Admin([Admin / Observer]) -->|Mengubah / Menambah Data Dokumen| Laravel
+
+    ChromaDB -->|Top K Results| FastAPI
+    FastAPI -->|ID + Tipe + Skor| Laravel
+
+    Laravel -->|Query Detail| MySQL[(MySQL Database)]
+    Laravel -->|Tampilkan Hasil| User
+
+    Admin([Admin]) -->|Tambah / Ubah Data| Laravel
     Laravel -->|POST /api/v1/sync/upsert| FastAPI
 ```
 
-- FastAPI melayani endpoint similarity dan sync.
-- MySQL di Laravel menyimpan data skripsi dan laporan kerja praktek.
-- ChromaDB menyimpan embedding untuk semantic similarity.
-- Model embedding lokal dibundel ke image dan dipakai dalam mode offline.
-- Runtime memprioritaskan ONNX quantized agar inferensi CPU lebih ringan.
+**Stack:**
+- Model embedding: `paraphrase-multilingual-MiniLM-L12-v2` (mendukung teks Bahasa Indonesia)
+- Runtime: ONNX quantized (prioritas) → SentenceTransformer (fallback)
+- Scoring: hybrid cosine semantic + Jaccard lexical
+- Vector index: ChromaDB dengan HNSW cosine space
 
 ---
 
-## Endpoint Utama
+## Endpoint
 
 ### Meta
 
-- `GET /`
-- `GET /health`
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/` | Informasi service dan versi |
+| `GET` | `/health` | Status service, model, dan jumlah vector terindeks |
 
 ### Similarity
 
-- `POST /api/v1/similarity/check` - Cek kemiripan judul (Skripsi / Laporan KP) dengan opsi penyaringan `document_type`.
-- `POST /api/v1/similarity/compare` - Bandingkan dua judul secara langsung (uji coba/offline)
-- `GET /api/v1/similarity/stats` - Statistik agregasi metadata untuk visualisasi laporan
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/v1/similarity/check` | Cek kemiripan judul dengan seluruh indeks |
+| `POST` | `/api/v1/similarity/compare` | Bandingkan dua judul secara langsung |
+| `GET` | `/api/v1/similarity/stats` | Distribusi data per program studi dan tahun |
 
-### Sync dari Laravel
+### Sync (dari Laravel)
 
-Semua endpoint sync wajib header:
+Semua endpoint sync wajib menyertakan header:
 
-```text
+```
 Authorization: Bearer <SYNC_SECRET>
 ```
 
-- `POST /api/v1/sync/upsert` - Sinkronisasi satu data dokumen (Observer)
-- `POST /api/v1/sync/bulk-upsert` - Sinkronisasi massal asinkron (Artisan command)
-- `GET /api/v1/sync/jobs/{job_id}` - Cek status bulk sync job
-- `DELETE /api/v1/sync/{document_id}` - Hapus dokumen dari indeks (Skripsi / Laporan KP)
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/v1/sync/upsert` | Sinkronisasi satu dokumen |
+| `POST` | `/api/v1/sync/bulk-upsert` | Sinkronisasi massal (async job) |
+| `GET` | `/api/v1/sync/jobs/{job_id}` | Status bulk sync job |
+| `DELETE` | `/api/v1/sync/{document_id}` | Hapus dokumen dari indeks |
 
-## Contoh Payload Sync
+---
 
-Payload baru yang direkomendasikan:
+## Payload
+
+### Sync — Upsert
 
 ```json
 {
   "document_id": "skripsi_123",
   "document_type": "skripsi",
   "judul": "Sistem Deteksi Kemiripan Judul Skripsi",
-  "abstrak": "Abstrak opsional",
-  "kata_kunci": "nlp, similarity",
-  "tahun": 2026,
+  "abstrak": "Abstrak opsional untuk meningkatkan akurasi embedding.",
+  "kata_kunci": "nlp, similarity, sentence transformers",
+  "tahun": 2024,
   "program_studi": "Informatika",
   "nim": "210170001",
   "nama_mahasiswa": "Nama Mahasiswa"
 }
 ```
 
-## Bentuk Hasil Similarity
-
-Contoh `POST /api/v1/similarity/check` (Payload request menyertakan `"document_type": "skripsi"`):
+### Similarity Check — Request
 
 ```json
 {
-  "query": {
-    "judul": "Sistem Deteksi Kemiripan Judul Skripsi",
-    "document_type": "skripsi"
-  },
+  "judul": "Sistem Deteksi Kemiripan Judul Skripsi",
+  "top_k": 5,
+  "threshold": 0.65,
+  "document_type": "skripsi"
+}
+```
+
+### Similarity Check — Response
+
+```json
+{
+  "query": { "judul": "Sistem Deteksi Kemiripan Judul Skripsi" },
   "total_found": 2,
   "results": [
     {
       "id": "skripsi_123",
       "document_id": 123,
       "document_type": "skripsi",
-      "skripsi_id": 123,
       "similarity_score": 0.9211,
-      "similarity_persen": "92.11%",
+      "similarity_persen": "92.1%",
       "level": "SANGAT TINGGI"
-    },
-    {
-      "id": "skripsi_88",
-      "document_id": 88,
-      "document_type": "skripsi",
-      "skripsi_id": 88,
-      "similarity_score": 0.8734,
-      "similarity_persen": "87.34%",
-      "level": "TINGGI"
     }
-  ]
+  ],
+  "peringatan": "Ditemukan judul dengan kemiripan SANGAT TINGGI (92.1%). Pertimbangkan untuk merevisi."
 }
 ```
 
-Laravel lalu mengambil detail data berdasarkan `document_id` dan `document_type` tersebut dari MySQL.
+**Level kemiripan:**
+
+| Level | Skor | Keterangan |
+|-------|------|------------|
+| SANGAT TINGGI | ≥ 85% | Wajib revisi judul/topik |
+| TINGGI | 70–84% | Pertimbangkan revisi |
+| SEDANG | 50–69% | Perlu ditinjau |
+| RENDAH | < 50% | Aman |
+
+---
 
 ## Menjalankan Lokal
 
-### Python langsung
+### Python
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux/macOS
 pip install -r requirements.txt
-copy .env.example .env
+copy .env.example .env        # lalu isi SYNC_SECRET
 python main.py
 ```
 
-API lokal akan berjalan di:
-
-- `http://localhost:8181`
-- docs: `http://localhost:8181/docs`
+API tersedia di `http://localhost:8181` — dokumentasi interaktif di `http://localhost:8181/docs`.
 
 ### Docker Compose
 
@@ -169,13 +166,7 @@ docker compose up -d
 docker compose logs -f similarity-api
 ```
 
-Port host lokal:
-
-- `http://localhost:8181`
-
-Port internal container:
-
-- `7860`
+---
 
 ## Integrasi Laravel
 
@@ -186,7 +177,7 @@ SIMILARITY_API_URL=https://<username>-<space-name>.hf.space
 SIMILARITY_API_SECRET=<nilai SYNC_SECRET yang sama>
 ```
 
-Contoh observer Laravel:
+Contoh Observer:
 
 ```php
 class SkripsiObserver
@@ -195,7 +186,8 @@ class SkripsiObserver
     {
         Http::withToken(config('services.similarity.secret'))
             ->post(config('services.similarity.url') . '/api/v1/sync/upsert', [
-                'skripsi_id'     => $skripsi->id,
+                'document_id'    => 'skripsi_' . $skripsi->id,
+                'document_type'  => 'skripsi',
                 'judul'          => $skripsi->judul,
                 'abstrak'        => $skripsi->abstrak,
                 'kata_kunci'     => $skripsi->kata_kunci,
@@ -209,55 +201,80 @@ class SkripsiObserver
     public function deleted(Skripsi $skripsi): void
     {
         Http::withToken(config('services.similarity.secret'))
-            ->delete(config('services.similarity.url') . '/api/v1/sync/' . $skripsi->id);
+            ->delete(config('services.similarity.url') . '/api/v1/sync/skripsi_' . $skripsi->id);
     }
 }
 ```
 
-Rekomendasi integrasi:
+**Rekomendasi integrasi:**
+- Gunakan `bulk-upsert` untuk initial sync
+- Gunakan Observer untuk operasi create / update / delete setelahnya
+- Business logic dan tampilan detail tetap dikelola di Laravel
 
-- gunakan `bulk-upsert` untuk initial sync
-- gunakan observer untuk create, update, delete setelah initial sync
-- setelah `check` mengembalikan daftar `id`, detail dan business rule tetap diambil di Laravel
+---
 
 ## Reindex
 
-Karena service ini tidak lagi menyimpan salinan data skripsi lokal, reindex dilakukan dengan mengirim ulang export JSON dari aplikasi utama:
+Kirim ulang data dari file JSON yang diekspor dari Laravel:
 
 ```bash
 python scripts/reindex.py --token <SYNC_SECRET> --input data-skripsi.json --batch-size 100
 ```
 
-Jika API berjalan di Docker:
+Dengan Docker:
 
 ```bash
-docker compose exec similarity-api python scripts/reindex.py --url http://localhost:7860 --token <SYNC_SECRET> --input /data/data-skripsi.json --batch-size 100
+docker compose exec similarity-api python scripts/reindex.py \
+  --url http://localhost:7860 \
+  --token <SYNC_SECRET> \
+  --input /data/data-skripsi.json \
+  --batch-size 100
 ```
 
-Gunakan reindex saat:
+Jalankan reindex saat:
+- Model embedding berubah
+- Migrasi server atau storage
+- ChromaDB kosong atau perlu dibersihkan
 
-- model embedding berubah
-- metadata vector store lama perlu dirapikan
-- migrasi server atau storage
-- ChromaDB kosong atau rusak
+---
 
-## Pengujian & Evaluasi Akurasi
+## Evaluasi Model
 
-Untuk mempermudah penulisan Bab Pengujian di Laporan Skripsi, jalankan script evaluasi berikut untuk menguji akurasi model secara otomatis menggunakan Confusion Matrix (Precision, Recall, F1-Score):
+Jalankan evaluasi akurasi menggunakan dataset pasangan judul ground-truth:
 
 ```bash
-python scripts/evaluate.py --token <SYNC_SECRET> --threshold 0.70
+python scripts/evaluate.py --token <SYNC_SECRET> --threshold 0.65
 ```
+
+Output (disimpan ke `results/`):
+- `eval_<timestamp>.json` — metrik lengkap per threshold
+- `eval_<timestamp>_threshold_sweep.csv` — sweep threshold 40–95%
+- `eval_<timestamp>_predictions.csv` — detail prediksi per pasang judul
+
+Visualisasikan hasilnya di Jupyter notebook:
+
+```bash
+jupyter notebook notebooks/evaluate.ipynb
+```
+
+---
+
+## Testing
+
+```bash
+python -m pytest tests/ -v
+```
+
+**Coverage:**
+- `tests/test_similarity_utils.py` — `calculate_jaccard`, `get_similarity_level`, `format_persen`
+- `tests/test_embedding_service.py` — `clean_title`, `_resolve_weights`, `build_index_text`
+- `tests/test_schemas.py` — validasi `SyncItem` dan `SimilarityCheckRequest`
+
+---
 
 ## Keamanan
 
-- `SYNC_SECRET` wajib minimal 16 karakter dan sebaiknya acak panjang
-- verifikasi token sync memakai constant-time compare
-- container berjalan sebagai user non-root UID `1000`
-- model tidak di-download saat runtime
-
-## Catatan Migrasi
-
-- tabel SQLite lama yang sebelumnya menyimpan cache data skripsi tidak lagi dipakai oleh aplikasi
-- metadata vector store lama yang masih menyimpan field tambahan tetap bisa terbaca
-- untuk merapikan metadata vector store agar mendapat metadata `program_studi` dan `tahun` secara bersih untuk endpoint `/stats`, jalankan reindex sekali setelah deploy versi ini
+- `SYNC_SECRET` wajib minimal 16 karakter — aplikasi gagal start jika masih nilai default
+- Verifikasi token menggunakan constant-time compare
+- Container berjalan sebagai non-root user UID `1000`
+- Model tidak diunduh saat runtime — dibundel ke dalam Docker image

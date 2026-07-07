@@ -1,36 +1,46 @@
+# ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
 **/__pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+
+# ── Environment ───────────────────────────────────────────────────────────
 .env
 .venv/
 venv/
 env/
 
-model_cache/
+# ── Database & Vector Store ───────────────────────────────────────────────
 chroma_db/
 skripsi.db
 skripsi.db-journal
 
-.idea/
-.vscode/
-
-# Local raw datasets (keamanan data mahasiswa)
-data/data-skripsi.csv
-data/data-laporan-kp.csv
-*.json
-
-# Ignore local academic guide
-PANDUAN_LAPORAN.md
-
-# Local model folder & ONNX output
-models_onnx/
+# ── ML Model (baked into Docker image, tidak perlu di repo) ───────────────
 model/
 model_cache/
+models_onnx/
 
-# OS temporary files
+# ── Data sensitif mahasiswa ───────────────────────────────────────────────
+# Hanya exclude file data mentah yang mengandung data pribadi mahasiswa
+data/data-skripsi.csv
+data/data-laporan-kp.csv
+data/data-skripsi.json
+data/data-laporan-kp.json
+
+# ── Hasil evaluasi (generated, tidak perlu di repo) ───────────────────────
+# File JSON/CSV/PNG output dari scripts/evaluate.py
+results/
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
+desktop.ini
+AGENTS.md
 
-# Logs & cache
+# ── Logs & pytest cache ───────────────────────────────────────────────────
 *.log
 .pytest_cache/
+
