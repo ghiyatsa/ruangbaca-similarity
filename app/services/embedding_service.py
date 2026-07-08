@@ -206,8 +206,11 @@ class EmbeddingService:
         # Lowercase
         text = title.lower()
         
-        # Hapus karakter non-alfanumerik (pertahankan huruf dan angka)
+        # Gabungkan istilah teknis bertanda hubung/garis miring/titik (misal k-means -> kmeans, ui/ux -> uiux, c4.5 -> c45)
         import re
+        text = re.sub(r'\b([a-z0-9]+)[-/.](([a-z0-9]+)\b)?', r'\1\3', text)
+        
+        # Hapus karakter non-alfanumerik lainnya (pertahankan huruf dan angka)
         text = re.sub(r'[^a-z0-9\s]', ' ', text)
         
         # Daftar kata penghubung dan boilerplate akademik yang diabaikan

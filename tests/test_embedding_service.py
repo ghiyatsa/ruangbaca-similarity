@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests untuk EmbeddingService (metode non-async / pure logic).
 
 Menguji:
@@ -76,6 +76,13 @@ class TestCleanTitle:
         svc.dynamic_stopwords = {"blockchain"}
         result = svc.clean_title("Blockchain Keamanan Data")
         assert "blockchain" not in result.lower()
+
+    def test_preserve_technical_hyphenated_terms(self, svc):
+        # Istilah seperti k-means, ui/ux, c4.5 harus dipertahankan sebagai satu kata tanpa karakter khusus
+        assert "kmeans" in svc.clean_title("Analisis K-Means")
+        assert "ecommerce" in svc.clean_title("Sistem E-Commerce")
+        assert "uiux" in svc.clean_title("Evaluasi UI/UX")
+        assert "c45" in svc.clean_title("Klasifikasi C4.5")
 
 
 class TestResolveWeights:
