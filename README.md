@@ -215,9 +215,6 @@ class SkripsiObserver
 
 ## Reindex
 
-> [!NOTE]
-> File `data-skripsi.json` (dan folder `data/`) tidak masuk ke repositori git untuk alasan privasi data. Silakan sediakan file data mentah secara lokal sebelum menjalankan reindex.
-
 Kirim ulang data dari file JSON yang diekspor dari Laravel:
 
 ```bash
@@ -243,9 +240,6 @@ Jalankan reindex saat:
 
 ## Evaluasi Model
 
-> [!NOTE]
-> Folder `notebooks/` dan file di dalamnya (`evaluate.ipynb`) diabaikan oleh git repositori. Gunakan Jupyter notebook secara lokal jika ingin memvisualisasikan hasil evaluasi.
-
 Jalankan evaluasi akurasi menggunakan dataset pasangan judul ground-truth:
 
 ```bash
@@ -257,11 +251,6 @@ Output (disimpan ke `results/`):
 - `eval_<timestamp>_threshold_sweep.csv` — sweep threshold 40–95%
 - `eval_<timestamp>_predictions.csv` — detail prediksi per pasang judul
 
-Visualisasikan hasilnya di Jupyter notebook:
-
-```bash
-jupyter notebook notebooks/evaluate.ipynb
-```
 
 ---
 
