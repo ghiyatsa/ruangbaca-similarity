@@ -21,12 +21,9 @@ model/
 model_cache/
 models_onnx/
 
-# ── Data sensitif mahasiswa ───────────────────────────────────────────────
-# Hanya exclude file data mentah yang mengandung data pribadi mahasiswa
-data/data-skripsi.csv
-data/data-laporan-kp.csv
-data/data-skripsi.json
-data/data-laporan-kp.json
+# ── Data & Notebooks (tidak berkaitan dengan operasional API) ─────────────
+data/
+notebooks/
 
 # ── Hasil evaluasi (generated, tidak perlu di repo) ───────────────────────
 # File JSON/CSV/PNG output dari scripts/evaluate.py
