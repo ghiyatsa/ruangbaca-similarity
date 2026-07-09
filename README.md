@@ -2,11 +2,6 @@
 
 Semantic similarity microservice untuk deteksi kemiripan dokumen akademik berbasis **FastAPI**, **Sentence Transformers**, dan **ChromaDB**.
 
-## Tentang Repositori
-Repositori ini berisi kode sumber untuk Similarity API yang digunakan oleh sistem RuangBaca. API ini bertugas memproses data teks (judul/abstrak skripsi dan laporan kerja praktik), menghasilkan representasi vektor (embeddings), dan melakukan pencarian kemiripan semantik menggunakan ChromaDB. Repositori ini difokuskan hanya pada kode operasional API dan pengujiannya.
-
----
-
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?logo=fastapi)
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-1.5-orange)
