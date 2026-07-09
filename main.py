@@ -47,13 +47,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description=(
-        "API deteksi kemiripan judul dokumen akademik menggunakan Sentence Transformers dan ChromaDB.\n\n"
-        "Arsitektur service ini adalah `vector_only`: data utama tetap berada di Laravel/MySQL, "
-        "sedangkan FastAPI ini hanya menangani embedding, vector index, dan semantic similarity search.\n\n"
-        "Gunakan endpoint `/api/v1/sync/*` untuk sinkronisasi dari Laravel dan `/api/v1/similarity/check` "
-        "untuk pencarian kemiripan berbasis judul."
-    ),
+    description="Semantic similarity microservice untuk deteksi kemiripan dokumen akademik berbasis FastAPI, Sentence Transformers, dan ChromaDB.",
     version=settings.VERSION,
     lifespan=lifespan,
     docs_url="/docs",
