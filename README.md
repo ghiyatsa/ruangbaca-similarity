@@ -1,3 +1,9 @@
+---
+title: RuangBaca Similarity API
+sdk: docker
+app_port: 7860
+---
+
 # RuangBaca Similarity API
 
 Semantic similarity microservice untuk deteksi kemiripan dokumen akademik berbasis **FastAPI**, **Sentence Transformers**, dan **ChromaDB**.
