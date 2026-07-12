@@ -62,7 +62,6 @@ class TestFormatPersen:
         assert format_persen(0.921) == "92.1%"
 
     def test_dibulatkan(self):
-        # 87.34% -> 87.3% (1 desimal)
         assert format_persen(0.8734) == "87.3%"
 
     def test_tiga_nol(self):
@@ -78,25 +77,21 @@ class TestCalculateJaccard:
         assert score == 0.0
 
     def test_sebagian_irisan(self):
-        # {"a", "b"} ∩ {"b", "c"} = {"b"} -> 1/3
         score = calculate_jaccard("a b", "b c")
         assert abs(score - 1 / 3) < 1e-9
 
     def test_satu_kosong(self):
         score = calculate_jaccard("", "kucing")
-        # words_a kosong, words_b = {"kucing"} -> irisan=0, union=1 -> 0.0
         assert score == 0.0
 
     def test_dua_dua_kosong(self):
         assert calculate_jaccard("", "") == 0.0
 
     def test_case_sensitive(self):
-        # "Sistem" != "sistem" secara default (belum di-lowercase di sini)
         score = calculate_jaccard("Sistem", "sistem")
         assert score == 0.0
 
     def test_duplikat_kata_dihitung_sekali(self):
-        # set("a a") = {"a"}, set("a b") = {"a","b"} -> irisan=1, union=2 -> 0.5
         score = calculate_jaccard("a a", "a b")
         assert abs(score - 0.5) < 1e-9
 
@@ -104,8 +99,6 @@ class TestCalculateJaccard:
         a = "klasifikasi penyakit diabetes knn"
         b = "klasifikasi diabetes menggunakan knn"
         score = calculate_jaccard(a, b)
-        # irisan = {"klasifikasi", "diabetes", "knn"} = 3
-        # union = {"klasifikasi", "penyakit", "diabetes", "knn", "menggunakan"} = 5
         assert abs(score - 3 / 5) < 1e-9
 
     def test_judul_skripsi_berbeda(self):

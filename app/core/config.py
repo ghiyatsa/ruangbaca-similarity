@@ -1,7 +1,7 @@
 """
-Konfigurasi aplikasi via pydantic-settings.
-Semua nilai di-load dari environment variable / file .env secara otomatis
-dengan validasi tipe yang ketat saat startup.
+Manajemen konfigurasi aplikasi menggunakan pustaka pydantic-settings.
+Seluruh nilai konfigurasi dimuat secara otomatis dari variabel lingkungan atau berkas .env
+dengan validasi tipe data yang ketat pada saat aplikasi dijalankan.
 """
 from typing import List
 from pydantic import Field, field_validator
@@ -16,34 +16,25 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── Metadata ───────────────────────────────────────────────────────────────
     PROJECT_NAME: str = "RuangBaca Similarity API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     PORT: int = 8181
 
-    # ── ChromaDB (vector store) ─────────────────────────────────────────────────
     CHROMA_DB_PATH: str = "./chroma_db"
     COLLECTION_NAME: str = "ruangbaca_embeddings"
 
-    # ── Sentence-Transformers model ─────────────────────────────────────────────
     MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     ABSTRAK_MAX_CHARS: int = 300
     DYNAMIC_STOPWORDS_THRESHOLD: float = 0.15
 
-    # ── Weighting Similarity ──────────────────────────────────────────────────
-    # Total bobot disarankan berjumlah 1.0
     WEIGHT_JUDUL: float = 0.7
     WEIGHT_ABSTRAK: float = 0.2
     WEIGHT_KATA_KUNCI: float = 0.1
 
-    # ── Hybrid Similarity (Semantic + Lexical) ──────────────────────────────────
     HYBRID_SEMANTIC_WEIGHT: float = 0.7
     HYBRID_LEXICAL_WEIGHT: float = 0.3
 
-    # ── CORS ────────────────────────────────────────────────────────────────────
-    # Gunakan str agar pydantic-settings tidak mencoba JSON-decode nilai dari .env.
-    # Gunakan property `allowed_origins_list` untuk mendapat List[str].
     ALLOWED_ORIGINS: str = "http://localhost:8000"
 
     @property
@@ -51,8 +42,6 @@ class Settings(BaseSettings):
         """Parse ALLOWED_ORIGINS yang dipisah koma menjadi list."""
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
-    # ── Keamanan sync ───────────────────────────────────────────────────────────
-    # Wajib ada di .env — aplikasi GAGAL START jika tidak di-set atau masih default.
     SYNC_SECRET: str = Field(..., min_length=16)
 
     @field_validator("SYNC_SECRET")
@@ -65,16 +54,11 @@ class Settings(BaseSettings):
             )
         return v
 
-    # ── Concurrency control ─────────────────────────────────────────────────────
-    # Batasi concurrent ML inference agar tidak OOM
     INFERENCE_CONCURRENCY: int = Field(default=4, ge=1, le=32)
-    # Ukuran chunk untuk bulk-upsert
     BULK_SYNC_CHUNK_SIZE: int = Field(default=100, ge=10, le=1000)
 
-    # ── Logging ─────────────────────────────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
 
-    # ── Offline mode (untuk Docker — model sudah di-bake ke image) ──────────────
     HF_HUB_OFFLINE: int = Field(default=0)
     TRANSFORMERS_OFFLINE: int = Field(default=0)
 

@@ -1,5 +1,9 @@
 """
-Router: Deteksi Kemiripan Judul Skripsi.
+Router API untuk deteksi kemiripan dokumen akademik (skripsi/laporan magang).
+Menyediakan endpoint untuk:
+- Cek kemiripan dokumen terhadap vector store (/check) dengan pencarian hibrida (semantik + leksikal).
+- Perbandingan langsung antara dua judul secara cepat (/compare).
+- Agregasi statistik metadata dokumen yang terindeks (/stats).
 """
 from __future__ import annotations
 
@@ -57,7 +61,6 @@ async def check_similarity(
 
     results: list[SimilarResult] = []
     for result in raw_results:
-        # Calculate Jaccard lexical similarity of cleaned titles
         db_title = result.get("document", "")
         cleaned_query = embedding_service.clean_title(body.judul)
         cleaned_db = embedding_service.clean_title(db_title)
@@ -96,7 +99,6 @@ async def check_similarity(
             )
         )
 
-    # Sort results by hybrid_score descending just in case Jaccard shifted order
     results.sort(key=lambda x: x.similarity_score, reverse=True)
 
     peringatan: str | None = None
@@ -177,7 +179,6 @@ async def get_stats(request: Request) -> dict:
             "distribusi_tahun": {},
         }
         
-    # Ambil maksimal 10.000 data di database untuk agregasi lokal
     results = await vector_store._run(
         vector_store.collection.get,
         limit=10000,

@@ -1,5 +1,9 @@
 """
-Pydantic schemas untuk validasi request / response.
+Definisi skema data Pydantic untuk validasi input dan output API.
+Mencakup model untuk:
+- Item sinkronisasi dokumen tunggal (SyncItem) dan massal (BulkSyncRequest).
+- Response status sinkronisasi (SyncResponse, BulkSyncResponse, BulkSyncJobStatusResponse).
+- Parameter deteksi kemiripan (SimilarityCheckRequest) dan hasilnya (SimilarResult, SimilarityCheckResponse).
 """
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -40,16 +44,13 @@ class SyncItem(BaseModel):
     @classmethod
     def populate_document_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            # Resolve document_type
             doc_type = data.get("document_type") or data.get("type") or "skripsi"
             data["document_type"] = doc_type
 
-            # Resolve skripsi_id / laravel_id
             s_id = data.get("skripsi_id") or data.get("laravel_id")
             if s_id is not None:
                 data["skripsi_id"] = int(s_id)
 
-            # Resolve document_id
             doc_id = data.get("document_id")
             if not doc_id:
                 if s_id is not None:
@@ -58,7 +59,6 @@ class SyncItem(BaseModel):
                     raise ValueError("Either document_id or skripsi_id must be provided")
             else:
                 data["document_id"] = str(doc_id)
-                # If document_id is something like skripsi_123, try to extract skripsi_id
                 if "_" in data["document_id"] and data.get("skripsi_id") is None:
                     parts = data["document_id"].split("_")
                     if parts[-1].isdigit():

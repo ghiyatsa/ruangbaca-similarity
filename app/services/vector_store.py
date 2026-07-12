@@ -1,10 +1,9 @@
 """
-VectorStore — penyimpanan dan pencarian embedding menggunakan ChromaDB.
-
-Perbaikan dari v1:
-- Semua ChromaDB call di-wrap dalam run_in_executor agar tidak memblokir event loop.
-  ChromaDB PersistentClient bersifat synchronous; memanggil langsung di `async def`
-  akan membekukan seluruh event loop selama operasi berlangsung.
+Layanan vector store (VectorStore) untuk penyimpanan dan pencarian embedding menggunakan ChromaDB.
+Semua operasi ChromaDB yang bersifat synchronous di-wrap dalam thread pool executor
+menggunakan `loop.run_in_executor` agar tidak memblokir event loop utama FastAPI.
+Menyediakan fitur untuk penambahan (upsert), pencarian semantik (search), penghapusan (delete),
+serta penghitungan dokumen yang terindeks.
 """
 from __future__ import annotations
 
@@ -40,7 +39,6 @@ class VectorStore:
             self.collection.count(),
         )
 
-    # ── Internal helper ────────────────────────────────────────────────────────
 
     async def _run(self, fn, *args, **kwargs):
         """
@@ -50,7 +48,6 @@ class VectorStore:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(fn, *args, **kwargs))
 
-    # ── Penulisan ──────────────────────────────────────────────────────────────
 
     async def upsert(
         self,
@@ -92,7 +89,6 @@ class VectorStore:
             **kwargs
         )
 
-    # ── Pembacaan ──────────────────────────────────────────────────────────────
 
     async def search(
         self,
@@ -146,7 +142,6 @@ class VectorStore:
 
         return output
 
-    # ── Penghapusan ────────────────────────────────────────────────────────────
 
     async def indexed_ids(self, limit: int = 500, offset: int = 0) -> List[str]:
         """Ambil daftar ID dokumen yang saat ini tersimpan di vector store."""
@@ -171,7 +166,6 @@ class VectorStore:
         )
         logger.info("VectorStore direset — collection '%s' kosong.", settings.COLLECTION_NAME)
 
-    # ── Statistik ──────────────────────────────────────────────────────────────
 
     async def count(self) -> int:
         """Jumlah embedding yang tersimpan."""
@@ -183,7 +177,6 @@ class VectorStore:
         if count == 0:
             return []
         
-        # Ambil semua data. Untuk skalabilitas, kita batasi sampai 50.000 data.
         results = await self._run(
             self.collection.get,
             limit=50000,
@@ -191,11 +184,9 @@ class VectorStore:
         )
         
         titles = []
-        # Coba ambil dari documents dulu
         if results.get("documents"):
             titles = [doc for doc in results["documents"] if doc]
         
-        # Jika kosong atau tidak lengkap, fallback ke metadatas
         if not titles and results.get("metadatas"):
             for meta in results["metadatas"]:
                 if meta and "judul" in meta:

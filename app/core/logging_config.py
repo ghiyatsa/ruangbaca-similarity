@@ -1,6 +1,6 @@
 """
-Structured logging setup.
-Ganti semua `print()` dengan logger agar output bisa di-filter dan di-format.
+Konfigurasi sistem pencatatan terstruktur (structured logging).
+Menggantikan fungsi keluaran standar untuk memfasilitasi pemformatan dan penyaringan log.
 """
 import logging
 import sys
@@ -14,7 +14,6 @@ def setup_logging(level: str = "INFO") -> None:
         format=fmt,
         handlers=[logging.StreamHandler(sys.stdout)],
     )
-    # Kurangi noise dari library eksternal
     logging.getLogger("chromadb").setLevel(logging.WARNING)
     logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
     logging.getLogger("transformers").setLevel(logging.WARNING)

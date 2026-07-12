@@ -1,18 +1,14 @@
 """
-Rate limiting & concurrency control.
-
-- `inference_semaphore`: Batasi concurrent ML inference agar tidak OOM.
-  Dibuat lazy (saat pertama diakses) supaya selalu pada event loop yang benar.
-- `limiter`: SlowAPI HTTP rate limiter per IP address.
+Modul pembatasan laju permintaan (rate limiting) dan kontrol konkurensi.
+Menyediakan mekanisme pencegahan kelebihan beban kerja memori (Out-Of-Memory)
+dan pembatasan laju lalu lintas HTTP per alamat IP.
 """
 import asyncio
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-# HTTP rate limiter (SlowAPI) — dipasang ke app.state di main.py
 limiter = Limiter(key_func=get_remote_address)
 
-# ── Semaphore (lazy init) ─────────────────────────────────────────────────────
 _semaphore: asyncio.Semaphore | None = None
 
 

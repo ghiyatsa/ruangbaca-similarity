@@ -1,6 +1,6 @@
 """
-In-memory job tracker untuk bulk sync jobs.
-FastAPI ini tidak lagi menyimpan database SQLite, membuatnya stateless dan cloud-ready.
+Repositori pelacak pekerjaan sinkronisasi massal dalam memori (in-memory job tracker).
+Mengelola status sinkronisasi secara dinamis tanpa ketergantungan pada basis data relasional.
 """
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -16,7 +16,6 @@ class JobState(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-# Global in-memory storage for jobs
 _jobs: Dict[str, JobState] = {}
 
 class SyncJobRepository:
@@ -24,7 +23,6 @@ class SyncJobRepository:
     
     @staticmethod
     async def create(*, job_id: str, payload_json: str, total_received: int) -> JobState:
-        # payload_json disimpan in-memory (di-attach atau diabaikan jika tidak diperlukan lagi)
         job = JobState(
             id=job_id,
             status="pending",
@@ -33,7 +31,6 @@ class SyncJobRepository:
             created_at=datetime.utcnow()
         )
         _jobs[job_id] = job
-        # Kita simpan payload di storage lokal global jika task perlu deserialisasi
         job.__dict__["_payload_json"] = payload_json
         return job
 

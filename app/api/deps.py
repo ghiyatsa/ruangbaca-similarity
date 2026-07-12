@@ -1,5 +1,6 @@
 """
-Shared FastAPI dependencies dipusatkan di sini agar tidak tersebar di router.
+Komponen dependensi bersama (shared dependencies) FastAPI.
+Seluruh dependensi modular dipusatkan di sini untuk mempermudah pemeliharaan kode.
 """
 import secrets
 
@@ -23,13 +24,11 @@ async def verify_sync_token(
 
     Token harus cocok dengan SYNC_SECRET di .env.
     """
-    # 1. Cek custom header dulu (prioritas untuk HF Space environment)
     if x_similarity_api_secret and secrets.compare_digest(
         x_similarity_api_secret, settings.SYNC_SECRET
     ):
         return
 
-    # 2. Cek Bearer token (fallback untuk local/direct access)
     if (
         credentials
         and credentials.scheme.lower() == "bearer"
@@ -37,7 +36,6 @@ async def verify_sync_token(
     ):
         return
 
-    # 3. Jika tidak ada yang cocok
     raise HTTPException(
         status_code=401,
         detail="Token sinkronisasi tidak valid atau tidak ditemukan.",

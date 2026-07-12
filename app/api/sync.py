@@ -1,5 +1,10 @@
 """
-Router: Sinkronisasi dari Laravel.
+Router API untuk sinkronisasi data dari aplikasi Laravel ke vector store (ChromaDB).
+Menyediakan endpoint untuk:
+- Sinkronisasi massal asinkron secara aman (/bulk dan /bulk/status).
+- Penambahan atau pembaruan dokumen tunggal secara instan (/upsert).
+- Penghapusan dokumen dari vector store (/delete).
+Mendukung kelangsungan tugas sinkronisasi yang belum selesai setelah restart.
 """
 from __future__ import annotations
 
@@ -129,7 +134,6 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
             if job is not None:
                 await SyncJobRepository.mark_completed(job)
 
-            # Update dynamic stopwords setelah sinkronisasi massal selesai
             await embedding_service.update_dynamic_stopwords(vector_store)
 
             logger.info("Bulk-upsert job selesai: %s", job_id)
@@ -184,7 +188,6 @@ async def upsert_one(
         document=body.judul,
     )
 
-    # Update dynamic stopwords setelah single upsert selesai
     await embedding_service.update_dynamic_stopwords(vector_store)
 
     logger.info("Upsert dokumen document_id=%s selesai.", body.document_id)
@@ -283,7 +286,6 @@ async def delete_by_document_id(
 ) -> None:
     vector_store = request.app.state.vector_store
 
-    # Backward compatibility: if purely numeric, default to skripsi_ prefix
     target_id = document_id
     if document_id.isdigit():
         target_id = f"skripsi_{document_id}"

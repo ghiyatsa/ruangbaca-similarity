@@ -1,5 +1,6 @@
 """
-Helpers umum yang dipakai di beberapa router.
+Helper untuk ekstraksi dan konstruksi metadata dari dokumen akademik (SyncItem).
+Digunakan untuk standardisasi metadata yang disimpan ke dalam vector store.
 """
 from app.schemas.document import SyncItem
 

@@ -1,11 +1,11 @@
 """
-EmbeddingService - mengubah teks menjadi vector embedding.
-
-Perbaikan dari v1:
-- Ganti @alru_cache (tidak kompatibel dengan np.ndarray) -> cachetools.LRUCache
-- Ganti asyncio.get_event_loop() -> asyncio.get_running_loop() (Python 3.10+)
-- Tambah inference semaphore agar concurrent inference tidak menyebabkan OOM
-- Thread-safe cache dengan threading.Lock
+Layanan untuk pemrosesan teks dan pembuatan vektor embedding (EmbeddingService).
+Menggunakan model Sentence Transformers dengan dukungan akselerasi Optimum ONNX Runtime.
+Dilengkapi dengan:
+- Thread-safe cache hasil embedding berbasis cachetools.LRUCache.
+- Pembersihan teks (normalisasi, penghapusan kata umum/stopwords bahasa Indonesia/Inggris).
+- Pembaruan stopwords dinamis berdasarkan frekuensi dokumen di vector store.
+- Pengaturan konkurensi inferensi (semaphore) untuk mencegah Out-Of-Memory (OOM).
 """
 from __future__ import annotations
 
