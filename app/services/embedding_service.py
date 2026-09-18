@@ -352,6 +352,47 @@ class EmbeddingService:
             await self.load_model()
         return await self._encode_single(self.clean_title(judul))
 
+    def _collect_batch_texts(self, items: List[tuple]) -> tuple[List[str], List[tuple]]:
+        """Kumpulkan teks unik per bagian dan peta indeksnya untuk rekonstruksi.
+
+        Mengembalikan (all_texts, mapping) dengan mapping berisi
+        (idx_judul, idx_abstrak, idx_kata_kunci, bobot_j, bobot_a, bobot_kk).
+        Indeks -1 berarti bagian tersebut tidak ada.
+        """
+        all_texts: List[str] = []
+        mapping: List[tuple] = []
+
+        for j, a, k, weight_j, weight_a, weight_k in items:
+            idx_judul = len(all_texts)
+            all_texts.append(self.clean_title(j))
+
+            idx_abstrak = -1
+            if a:
+                clean_a = a.strip()[: settings.ABSTRAK_MAX_CHARS]
+                if clean_a:
+                    idx_abstrak = len(all_texts)
+                    all_texts.append(clean_a)
+
+            idx_kk = -1
+            if k:
+                clean_k = k.strip()
+                if clean_k:
+                    idx_kk = len(all_texts)
+                    all_texts.append(clean_k)
+
+            mapping.append((
+                idx_judul,
+                idx_abstrak,
+                idx_kk,
+                *self._resolve_weights(
+                    bobot_judul=weight_j,
+                    bobot_abstrak=weight_a,
+                    bobot_kata_kunci=weight_k,
+                ),
+            ))
+
+        return all_texts, mapping
+
     async def encode_batch_for_index(self, items: List[tuple]) -> np.ndarray:
         """
         Encode banyak skripsi sekaligus dengan pembobotan.
@@ -361,34 +402,8 @@ class EmbeddingService:
             await self.load_model()
 
         # 1. Kumpulkan semua teks unik untuk di-encode (mengurangi redundansi)
-        # Format: [(judul, abstrak, kata_kunci, bobot_judul, bobot_abstrak, bobot_kata_kunci), ...]
-        all_texts = []
-        mapping = [] # Untuk melacak index mana milik skripsi mana
+        all_texts, mapping = self._collect_batch_texts(items)
 
-        for j, a, k, weight_j, weight_a, weight_k in items:
-            # Kita simpan index untuk rekonstruksi nanti
-            idx_judul = len(all_texts)
-            all_texts.append(self.clean_title(j))
-            
-            idx_abstrak = -1
-            if a:
-                clean_a = a.strip()[: settings.ABSTRAK_MAX_CHARS]
-                if clean_a:
-                    idx_abstrak = len(all_texts)
-                    all_texts.append(clean_a)
-            
-            idx_kk = -1
-            if k:
-                clean_k = k.strip()
-                if clean_k:
-                    idx_kk = len(all_texts)
-                    all_texts.append(clean_k)
-            
-            mapping.append((idx_judul, idx_abstrak, idx_kk, *self._resolve_weights(
-                bobot_judul=weight_j,
-                bobot_abstrak=weight_a,
-                bobot_kata_kunci=weight_k,
-            )))
         # 2. Batch encode semua teks
         all_embeddings = await self._encode_batch(all_texts)
 

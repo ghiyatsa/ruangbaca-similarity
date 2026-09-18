@@ -90,6 +90,26 @@ def _on_background_job_done(task: asyncio.Task) -> None:
         logger.error("Bulk-upsert job berhenti dengan exception tak tertangani: %r", exception)
 
 
+def _verify_indexed_total(reset_index: bool, expected_total: int, total_indexed: int) -> None:
+    """Pastikan jumlah vector sesuai harapan setelah proses upsert.
+
+    Saat reset penuh, jumlah vector harus tepat sama dengan jumlah dokumen unik.
+    Saat upsert bertahap, jumlah vector tidak boleh lebih kecil dari data yang
+    diterima (bisa lebih besar karena dokumen lama yang belum dihapus).
+    """
+    if reset_index:
+        if total_indexed != expected_total:
+            raise RuntimeError(
+                "Jumlah vector hasil reindex tidak konsisten "
+                f"(expected={expected_total}, vector={total_indexed})."
+            )
+    elif total_indexed < expected_total:
+        raise RuntimeError(
+            "Jumlah vector terindeks lebih kecil dari data yang diterima "
+            f"(received={expected_total}, vector={total_indexed})."
+        )
+
+
 async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
     embedding_service = app_state.embedding_service
     vector_store = app_state.vector_store
@@ -142,18 +162,7 @@ async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
                     await SyncJobRepository.update_progress(job, processed)
 
             total_indexed = await vector_store.count()
-
-            if reset_index:
-                if total_indexed != expected_total:
-                    raise RuntimeError(
-                        "Jumlah vector hasil reindex tidak konsisten "
-                        f"(expected={expected_total}, vector={total_indexed})."
-                    )
-            elif total_indexed < expected_total:
-                raise RuntimeError(
-                    "Jumlah vector terindeks lebih kecil dari data yang diterima "
-                    f"(received={expected_total}, vector={total_indexed})."
-                )
+            _verify_indexed_total(reset_index, expected_total, total_indexed)
 
             job = await SyncJobRepository.find_by_id(job_id)
             if job is not None:

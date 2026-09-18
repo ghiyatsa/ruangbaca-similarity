@@ -7,6 +7,8 @@ dari pemrosesan job latar belakang tanpa menyentuh ChromaDB maupun model.
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from app.api.sync import _run_bulk_upsert_job
 from app.repositories.sync_job_repo import SyncJobRepository
 
@@ -204,3 +206,24 @@ class TestBulkJobPipeline:
             _run_bulk_upsert_job(self._app_state(fake_embedding, fake_store), "tidak-ada")
         )
         assert fake_store.upserts == []
+
+
+class TestVerifyIndexedTotal:
+    """Helper validasi jumlah vector (diekstrak dari _run_bulk_upsert_job)."""
+
+    def test_reset_menuntut_jumlah_sama_persis(self):
+        from app.api.sync import _verify_indexed_total
+
+        _verify_indexed_total(True, 5, 5)  # tidak melempar
+
+        with pytest.raises(RuntimeError, match="tidak konsisten"):
+            _verify_indexed_total(True, 5, 4)
+
+    def test_upsert_bertahap_hanya_menolak_jika_kurang(self):
+        from app.api.sync import _verify_indexed_total
+
+        _verify_indexed_total(False, 5, 5)  # sama -> ok
+        _verify_indexed_total(False, 5, 9)  # lebih besar -> ok (dokumen lama)
+
+        with pytest.raises(RuntimeError, match="lebih kecil"):
+            _verify_indexed_total(False, 5, 4)
