@@ -19,6 +19,12 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      # Gerbang cepat: pastikan SELURUH berkas Python (termasuk scripts/ dan
+      # tests/) bisa dikompilasi. pytest hanya meng-import tests/, sehingga
+      # berkas rusak di scripts/ tidak akan pernah tertangkap tanpa langkah ini.
+      - name: Syntax check all Python files
+        run: python -m compileall -q app scripts tests main.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
