@@ -7,7 +7,8 @@ Menguji:
 """
 import pytest
 from pydantic import ValidationError
-from app.schemas.document import SyncItem, SimilarityCheckRequest
+
+from app.schemas.document import SimilarityCheckRequest, SyncItem
 
 
 class TestSyncItem:

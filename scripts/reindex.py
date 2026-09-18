@@ -26,7 +26,7 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
         sys.exit(1)
 
     try:
-        with open(input_file, "r", encoding="utf-8") as file:
+        with open(input_file, encoding="utf-8") as file:
             records = json.load(file)
     except Exception as exc:
         print(f"Gagal membaca file input: {exc}")
@@ -38,13 +38,11 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
 
     print(f"Memulai re-indexing (batch_size={batch_size})...\n")
 
-    batch_num = 0
     total_success = 0
     total_failed = 0
 
-    for offset in range(0, len(records), batch_size):
+    for batch_num, offset in enumerate(range(0, len(records), batch_size), start=1):
         batch = records[offset:offset + batch_size]
-        batch_num += 1
         print(f"Batch {batch_num}: {len(batch)} item (offset {offset})")
 
         with_source_id = [record for record in batch if record.get("skripsi_id")]

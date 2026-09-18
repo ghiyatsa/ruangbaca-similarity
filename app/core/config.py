@@ -4,6 +4,7 @@ Seluruh nilai konfigurasi dimuat secara otomatis dari variabel lingkungan atau b
 dengan validasi tipe data yang ketat pada saat aplikasi dijalankan.
 """
 from typing import List
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

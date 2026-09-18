@@ -1,0 +1,51 @@
+[project]
+name = "ruangbaca-similarity"
+version = "1.0.0"
+description = "Semantic similarity microservice untuk deteksi kemiripan dokumen akademik"
+requires-python = ">=3.11"
+
+# ── Ruff: linter + formatter ──────────────────────────────────────────────────
+# Fokus pada kebenaran (correctness), bukan preferensi gaya, agar temuan bersifat
+# dapat ditindaklanjuti. Aturan gaya (pyupgrade/annotation) sengaja TIDAK
+# diaktifkan agar tidak memicu refactor besar tanpa manfaat fungsional.
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E4",   # import (E401 multi-import, E402 module-import-not-at-top)
+    "E7",   # statement (E711/E712 perbandingan None/True)
+    "E9",   # runtime (E902 io-error)
+    "F",    # pyflakes: nama tak terdefinisi, import mati, redefinisi
+    "I",    # isort: urutan & pengelompokan import
+    "B",    # flake8-bugbear: bug yang sering terlewat
+    "SIM",  # flake8-simplify: penyederhanaan logika
+    "C4",   # flake8-comprehensions
+    "RUF",  # aturan spesifik Ruff (termasuk RUF006 task asyncio)
+    "UP",   # pyupgrade (sintaks modern)
+]
+
+ignore = [
+    # Security(...) sebagai default argumen adalah idiom resmi FastAPI —
+    # peringatan ini selalu salah pada dependency injection FastAPI.
+    "B008",
+    # Docstring berbahasa Indonesia memakai en dash/karakter tipografis
+    # dengan sengaja; ini bukan ambiguitas yang berbahaya.
+    "RUF002",
+    "RUF003",
+    # Anotasi gaya lama (Optional/Union/typing.List) dipertahankan demi
+    # konsistensi dengan basis kode yang sudah ada.
+    "UP006",
+    "UP007",
+    "UP035",
+    "UP037",
+    "UP045",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Uji unit sering meng-unpack nilai yang tidak seluruhnya dipakai.
+"tests/*" = ["RUF059"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

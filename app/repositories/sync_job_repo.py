@@ -4,7 +4,9 @@ Mengelola status sinkronisasi secara dinamis tanpa ketergantungan pada basis dat
 """
 from datetime import datetime
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel
+
 
 class JobState(BaseModel):
     id: str

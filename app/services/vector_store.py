@@ -10,11 +10,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import partial
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 import numpy as np
+from chromadb.config import Settings as ChromaSettings
 
 from app.core.config import settings
 

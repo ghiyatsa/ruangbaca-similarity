@@ -267,6 +267,29 @@ python -m pytest tests/ -v
 
 ---
 
+## Linting
+
+Proyek memakai [Ruff](https://docs.astral.sh/ruff/) dengan aturan yang berfokus pada
+**kebenaran** (bug & kesalahan nyata), bukan preferensi gaya. Konfigurasi ada di
+`pyproject.toml`.
+
+```bash
+pip install -r requirements-dev.txt
+python -m ruff check .          # cek
+python -m ruff check . --fix    # perbaiki otomatis bila memungkinkan
+```
+
+Aturan yang aktif: `E4/E7/E9`, `F` (pyflakes), `I` (isort), `B` (bugbear),
+`SIM`, `C4`, `RUF`, `UP`. Aturan gaya anotasi (`UP006/007/035/037/045`) dan
+`B008` (idiom `Security(...)` FastAPI) sengaja diabaikan — lihat alasannya di
+`pyproject.toml`.
+
+CI menjalankan `compileall` pada seluruh berkas Python, `ruff check`, lalu
+`pytest`. Langkah `compileall` penting karena `pytest` hanya meng-import
+`tests/`, sehingga berkas rusak di `scripts/` tidak akan tertangkap tanpanya.
+
+---
+
 ## Keamanan
 
 - `SYNC_SECRET` wajib minimal 16 karakter — aplikasi gagal start jika masih nilai default

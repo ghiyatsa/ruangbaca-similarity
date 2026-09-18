@@ -8,6 +8,7 @@ Menguji:
   - build_query_text()  : normalisasi teks query
 """
 import pytest
+
 from app.services.embedding_service import EmbeddingService
 
 

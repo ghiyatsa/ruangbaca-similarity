@@ -7,6 +7,7 @@ Mencakup model untuk:
 """
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 

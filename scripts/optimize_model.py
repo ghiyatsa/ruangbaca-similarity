@@ -1,7 +1,10 @@
 import os
+
 from optimum.onnxruntime import ORTModelForFeatureExtraction
 from transformers import AutoTokenizer
+
 from app.core.config import settings
+
 
 def optimize():
     model_id = settings.MODEL_NAME

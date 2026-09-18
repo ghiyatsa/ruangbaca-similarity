@@ -2,8 +2,8 @@
 Titik masuk utama (entry point) FastAPI untuk Skripsi Similarity API.
 Layanan ini menyediakan antarmuka pemrograman aplikasi untuk deteksi kemiripan dokumen.
 """
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import Depends, FastAPI

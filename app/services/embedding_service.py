@@ -14,12 +14,21 @@ import logging
 import os
 import platform
 import threading
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 from cachetools import LRUCache
 
 from app.core.config import settings
+
+if TYPE_CHECKING:
+    # Hanya untuk anotasi tipe; import asli dilakukan secara lazy saat runtime
+    # (sentence_transformers berat dan optimum bersifat opsional).
+    from optimum.onnxruntime import ORTModelForFeatureExtraction
+    from sentence_transformers import SentenceTransformer
+    from transformers import AutoTokenizer
+
+    from app.services.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 

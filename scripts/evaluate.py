@@ -23,7 +23,6 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Optional
 
 import requests
 
@@ -347,7 +346,7 @@ def main() -> None:
 
     if args.dataset:
         try:
-            with open(args.dataset, "r", encoding="utf-8") as f:
+            with open(args.dataset, encoding="utf-8") as f:
                 dataset = json.load(f)
             print(f"Dataset dimuat dari: {args.dataset} ({len(dataset)} pasang)\n")
         except Exception as exc:

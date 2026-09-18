@@ -15,7 +15,7 @@ from itertools import islice
 from typing import List
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.deps import verify_sync_token
 from app.core.config import settings
@@ -63,6 +63,19 @@ def _deserialize_payload(payload_json: str) -> tuple[List[SyncItem], bool]:
 
 
 _bulk_sync_lock = asyncio.Lock()
+
+# Referensi kuat untuk task latar belakang. `asyncio.create_task` hanya menyimpan
+# referensi lemah, sehingga task yang tidak disimpan dapat di-GC di tengah
+# eksekusi (lihat dokumentasi asyncio). Set ini menahan task tetap hidup sampai
+# selesai, lalu menghapusnya lewat callback.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_background_job(app_state, job_id: str) -> None:
+    """Jalankan job bulk-upsert di latar belakang dengan referensi yang aman."""
+    task = asyncio.create_task(_run_bulk_upsert_job(app_state, job_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
@@ -149,7 +162,7 @@ async def resume_unfinished_jobs(app_state) -> None:
     jobs = await SyncJobRepository.list_unfinished()
 
     for job in jobs:
-        asyncio.create_task(_run_bulk_upsert_job(app_state, job.id))
+        _spawn_background_job(app_state, job.id)
 
     if jobs:
         logger.info("Menjadwalkan ulang %d bulk-upsert job yang belum selesai.", len(jobs))
@@ -226,7 +239,7 @@ async def bulk_upsert(
         total_received=len(body.data),
     )
 
-    asyncio.create_task(_run_bulk_upsert_job(request.app.state, job_id))
+    _spawn_background_job(request.app.state, job_id)
     logger.info(
         "Bulk-upsert diterima: job_id=%s total=%d reset_index=%s",
         job_id,

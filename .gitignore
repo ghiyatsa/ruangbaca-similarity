@@ -37,7 +37,8 @@ Thumbs.db
 desktop.ini
 AGENTS.md
 
-# ── Logs & pytest cache ───────────────────────────────────────────────────
+# ── Logs & cache linter/test ──────────────────────────────────────────────
 *.log
 .pytest_cache/
+.ruff_cache/
 
