@@ -21,14 +21,14 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
     try:
         health = session.get(f"{base}/health", timeout=5).json()
         print(f"API online - total terindeks saat ini: {health.get('total_indexed', '?')}")
-    except Exception as exc:
+    except (requests.RequestException, ValueError) as exc:
         print(f"Tidak bisa terhubung ke API: {exc}")
         sys.exit(1)
 
     try:
         with open(input_file, encoding="utf-8") as file:
             records = json.load(file)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"Gagal membaca file input: {exc}")
         sys.exit(1)
 
@@ -74,7 +74,7 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
                 response.raise_for_status()
                 total_success += len(with_source_id)
                 print(f"  Batch {batch_num} diterima (202 Accepted - diproses di background)")
-            except Exception as exc:
+            except requests.RequestException as exc:
                 total_failed += len(with_source_id)
                 print(f"  Batch {batch_num} gagal: {exc}")
 

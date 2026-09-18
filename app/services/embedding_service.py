@@ -132,11 +132,15 @@ class EmbeddingService:
                         logger.info("Model ONNX berhasil dimuat.")
                         return
                     except Exception as exc:
+                        # Sengaja luas: satu kandidat ONNX gagal tidak boleh
+                        # membatalkan fallback ke kandidat lain / SentenceTransformer.
+                        # exc_info wajib agar kegagalan muat model tidak tersembunyi.
                         logger.warning(
                             "Gagal memuat ONNX dari %s (%s): %s",
                             model_root,
                             onnx_file,
                             exc,
+                            exc_info=True,
                         )
 
         # Fallback ke SentenceTransformer

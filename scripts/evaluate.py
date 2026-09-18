@@ -206,7 +206,7 @@ def run_evaluation(
         print(f"  API online - model: {health.get('model_name', '?')}")
         print(f"  Total terindeks: {health.get('total_indexed', '?')} dokumen")
         print(f"  Backend: {health.get('model_backend', '?')}\n")
-    except Exception as exc:
+    except (requests.RequestException, ValueError) as exc:
         print(f"  Tidak bisa terhubung ke API: {exc}")
         sys.exit(1)
 
@@ -230,7 +230,7 @@ def run_evaluation(
             semantic = data.get("detail", {}).get("semantic_score", 0.0)
             lexical = data.get("detail", {}).get("lexical_score", 0.0)
             level = data.get("level", "-")
-        except Exception as exc:
+        except (requests.RequestException, ValueError) as exc:
             print(f"  [{i:02d}] GAGAL: {exc}")
             score = 0.0
             semantic = 0.0
@@ -349,7 +349,7 @@ def main() -> None:
             with open(args.dataset, encoding="utf-8") as f:
                 dataset = json.load(f)
             print(f"Dataset dimuat dari: {args.dataset} ({len(dataset)} pasang)\n")
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             print(f"Gagal membaca dataset: {exc}")
             sys.exit(1)
     else:
