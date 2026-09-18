@@ -75,7 +75,19 @@ def _spawn_background_job(app_state, job_id: str) -> None:
     """Jalankan job bulk-upsert di latar belakang dengan referensi yang aman."""
     task = asyncio.create_task(_run_bulk_upsert_job(app_state, job_id))
     _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    task.add_done_callback(_on_background_job_done)
+
+
+def _on_background_job_done(task: asyncio.Task) -> None:
+    """Lepas referensi task dan catat exception yang tidak tertangani.
+
+    Tanpa memanggil `task.exception()`, exception yang lolos akan dilaporkan
+    Python sebagai "Task exception was never retrieved" saat task di-GC.
+    """
+    _background_tasks.discard(task)
+
+    if not task.cancelled() and (exception := task.exception()) is not None:
+        logger.error("Bulk-upsert job berhenti dengan exception tak tertangani: %r", exception)
 
 
 async def _run_bulk_upsert_job(app_state, job_id: str) -> None:
