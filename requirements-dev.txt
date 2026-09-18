@@ -5,7 +5,8 @@
 # aturan antar rilis; tanpa pin, CI bisa tiba-tiba gagal tanpa perubahan kode.
 ruff==0.16.8
 
-# Test runner
+# Test runner + pengukuran coverage
 pytest==9.1.1
 pytest-asyncio==1.4.0
+pytest-cov==7.1.0
 httpx==0.28.1
