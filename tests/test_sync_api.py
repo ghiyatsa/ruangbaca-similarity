@@ -1,5 +1,4 @@
-"""
-Test endpoint HTTP /api/v1/sync/* dan pipeline bulk-upsert (sebelumnya 0%).
+"""Test endpoint HTTP /api/v1/sync/* dan pipeline bulk-upsert.
 
 Menguji autentikasi, upsert/delete, status job, serta jalur sukses & gagal
 dari pemrosesan job latar belakang tanpa menyentuh ChromaDB maupun model.

@@ -1,8 +1,7 @@
-"""
-Test endpoint HTTP /api/v1/similarity/* (sebelumnya 0% coverage).
+"""Test endpoint HTTP /api/v1/similarity/*.
 
-Menguji jalur kritis: autentikasi, validasi, pemetaan hasil pencarian,
-filter document_type, agregasi statistik, dan peringatan kemiripan tinggi.
+Menguji autentikasi, validasi, pemetaan hasil pencarian, filter document_type,
+agregasi statistik, dan peringatan kemiripan tinggi.
 """
 
 
