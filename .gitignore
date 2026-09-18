@@ -42,3 +42,8 @@ AGENTS.md
 .pytest_cache/
 .ruff_cache/
 
+# ── Coverage ──────────────────────────────────────────────────────────────
+.coverage
+.coverage.*
+htmlcov/
+
