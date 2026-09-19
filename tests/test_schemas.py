@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests untuk Pydantic schemas (app/schemas/document.py).
 
 Menguji:

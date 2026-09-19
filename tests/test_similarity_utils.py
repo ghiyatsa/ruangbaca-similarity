@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests untuk app/utils/similarity.py
 
 Menguji:

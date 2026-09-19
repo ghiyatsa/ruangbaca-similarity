@@ -1,4 +1,4 @@
-﻿"""
+"""
 Konfigurasi pytest — shared fixtures dan path setup.
 
 Fixture di sini membangun aplikasi FastAPI uji dengan router asli (prefix +
