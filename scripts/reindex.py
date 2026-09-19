@@ -5,6 +5,7 @@ Kirim ulang data skripsi dari file JSON ke endpoint bulk-upsert.
 Digunakan saat source of truth berada di Laravel/ruangbaca dan service ini
 hanya menyimpan vector. File JSON dapat diekspor dari aplikasi utama.
 """
+
 import argparse
 import json
 import sys
@@ -42,7 +43,7 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
     total_failed = 0
 
     for batch_num, offset in enumerate(range(0, len(records), batch_size), start=1):
-        batch = records[offset:offset + batch_size]
+        batch = records[offset : offset + batch_size]
         print(f"Batch {batch_num}: {len(batch)} item (offset {offset})")
 
         with_source_id = [record for record in batch if record.get("skripsi_id")]
@@ -89,9 +90,7 @@ def reindex_all(api_url: str, token: str, input_file: str, batch_size: int = 100
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Re-index data skripsi dari file JSON ke ChromaDB"
-    )
+    parser = argparse.ArgumentParser(description="Re-index data skripsi dari file JSON ke ChromaDB")
     parser.add_argument(
         "--url",
         default="http://localhost:8181",

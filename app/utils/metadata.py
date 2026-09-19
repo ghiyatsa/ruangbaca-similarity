@@ -2,6 +2,7 @@
 Helper untuk ekstraksi dan konstruksi metadata dari dokumen akademik (SyncItem).
 Digunakan untuk standardisasi metadata yang disimpan ke dalam vector store.
 """
+
 from app.schemas.document import SyncItem
 
 
@@ -17,4 +18,3 @@ def build_metadata(source: SyncItem) -> dict:
         "program_studi": source.program_studi if source.program_studi else "Tidak Diketahui",
         "judul": source.judul,
     }
-

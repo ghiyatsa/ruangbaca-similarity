@@ -7,6 +7,7 @@ Dilengkapi dengan:
 - Pembaruan stopwords dinamis berdasarkan frekuensi dokumen di vector store.
 - Pengaturan konkurensi inferensi (semaphore) untuk mencegah Out-Of-Memory (OOM).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -116,11 +117,9 @@ class EmbeddingService:
                     try:
                         self.model = await loop.run_in_executor(
                             None,
-                            lambda root=model_root, file_name=onnx_file: (
-                                ORTModelForFeatureExtraction.from_pretrained(
-                                    root,
-                                    file_name=file_name,
-                                )
+                            lambda root=model_root, file_name=onnx_file: ORTModelForFeatureExtraction.from_pretrained(
+                                root,
+                                file_name=file_name,
                             ),
                         )
                         self.tokenizer = await loop.run_in_executor(
@@ -215,44 +214,106 @@ class EmbeddingService:
         """
         if not title:
             return ""
-        
+
         # Lowercase
         text = title.lower()
-        
+
         # Gabungkan istilah teknis bertanda hubung/garis miring/titik (misal k-means -> kmeans, ui/ux -> uiux, c4.5 -> c45)
         import re
-        text = re.sub(r'\b([a-z0-9]+)[-/.](([a-z0-9]+)\b)?', r'\1\3', text)
-        
+
+        text = re.sub(r"\b([a-z0-9]+)[-/.](([a-z0-9]+)\b)?", r"\1\3", text)
+
         # Hapus karakter non-alfanumerik lainnya (pertahankan huruf dan angka)
-        text = re.sub(r'[^a-z0-9\s]', ' ', text)
-        
+        text = re.sub(r"[^a-z0-9\s]", " ", text)
+
         # Daftar kata penghubung dan boilerplate akademik yang diabaikan
         stopwords = {
             # Bahasa Indonesia
-            'dan', 'yang', 'untuk', 'pada', 'dengan', 'dari', 'ke', 'di', 'ini', 'itu', 'atau',
-            'sebagai', 'dalam', 'tentang', 'oleh', 'adalah', 'adapun', 'serta', 'sebuah', 'ia', 'juga',
+            "dan",
+            "yang",
+            "untuk",
+            "pada",
+            "dengan",
+            "dari",
+            "ke",
+            "di",
+            "ini",
+            "itu",
+            "atau",
+            "sebagai",
+            "dalam",
+            "tentang",
+            "oleh",
+            "adalah",
+            "adapun",
+            "serta",
+            "sebuah",
+            "ia",
+            "juga",
             # Boilerplate akademik
-            'rancang', 'bangun', 'sistem', 'aplikasi', 'metode', 'studi', 'kasus', 'algoritma',
-            'perancangan', 'pembuatan', 'penerapan', 'berbasis', 'menggunakan', 'analisis', 
-            'implementasi', 'uji', 'kinerja', 'evaluasi', 'pengembangan', 'model', 'rancangan', 
-            'prototipe', 'prototype', 'berbasiskan', 'mengimplementasikan', 'menganalisis', 'berupa',
-            'laporan', 'tugas', 'akhir', 'skripsi', 'kerja', 'praktek', 'praktik', 'kp',
+            "rancang",
+            "bangun",
+            "sistem",
+            "aplikasi",
+            "metode",
+            "studi",
+            "kasus",
+            "algoritma",
+            "perancangan",
+            "pembuatan",
+            "penerapan",
+            "berbasis",
+            "menggunakan",
+            "analisis",
+            "implementasi",
+            "uji",
+            "kinerja",
+            "evaluasi",
+            "pengembangan",
+            "model",
+            "rancangan",
+            "prototipe",
+            "prototype",
+            "berbasiskan",
+            "mengimplementasikan",
+            "menganalisis",
+            "berupa",
+            "laporan",
+            "tugas",
+            "akhir",
+            "skripsi",
+            "kerja",
+            "praktek",
+            "praktik",
+            "kp",
             # Bahasa Inggris
-            'of', 'the', 'and', 'in', 'on', 'for', 'with', 'a', 'an', 'to', 'based', 'using', 'system'
+            "of",
+            "the",
+            "and",
+            "in",
+            "on",
+            "for",
+            "with",
+            "a",
+            "an",
+            "to",
+            "based",
+            "using",
+            "system",
         }
-        
+
         words = text.split()
         # Ambil dynamic_stopwords jika ada, jika tidak default ke set kosong
         dynamic_stopwords = getattr(self, "dynamic_stopwords", set())
         all_stopwords = stopwords.union(dynamic_stopwords)
         filtered = [w for w in words if w not in all_stopwords and len(w) >= 3]
-        
-        # Jika hasil filter kosong (misal judul sangat pendek / semua kata adalah stopwords), 
+
+        # Jika hasil filter kosong (misal judul sangat pendek / semua kata adalah stopwords),
         # kembalikan teks asli agar tidak menghasilkan embedding kosong.
         if not filtered:
             return title.strip()
-            
-        return ' '.join(filtered)
+
+        return " ".join(filtered)
 
     async def update_dynamic_stopwords(self, vector_store: "VectorStore", threshold: Optional[float] = None) -> None:
         """
@@ -275,7 +336,7 @@ class EmbeddingService:
                 word_counts = Counter()
                 for title in titles:
                     # Ambil kata unik per dokumen untuk menghitung Document Frequency (DF)
-                    words = set(re.findall(r'[a-z0-9]{3,}', title.lower()))
+                    words = set(re.findall(r"[a-z0-9]{3,}", title.lower()))
                     for w in words:
                         word_counts[w] += 1
                 return word_counts
@@ -296,7 +357,7 @@ class EmbeddingService:
                 len(new_dynamic),
                 threshold,
                 total_docs,
-                list(new_dynamic)[:15]
+                list(new_dynamic)[:15],
             )
         except Exception as exc:
             logger.exception("Gagal memperbarui dynamic stopwords: %s", exc)
@@ -380,16 +441,18 @@ class EmbeddingService:
                     idx_kk = len(all_texts)
                     all_texts.append(clean_k)
 
-            mapping.append((
-                idx_judul,
-                idx_abstrak,
-                idx_kk,
-                *self._resolve_weights(
-                    bobot_judul=weight_j,
-                    bobot_abstrak=weight_a,
-                    bobot_kata_kunci=weight_k,
-                ),
-            ))
+            mapping.append(
+                (
+                    idx_judul,
+                    idx_abstrak,
+                    idx_kk,
+                    *self._resolve_weights(
+                        bobot_judul=weight_j,
+                        bobot_abstrak=weight_a,
+                        bobot_kata_kunci=weight_k,
+                    ),
+                )
+            )
 
         return all_texts, mapping
 
@@ -422,7 +485,7 @@ class EmbeddingService:
             norm = np.linalg.norm(v_combined)
             if norm > 1e-9:
                 v_combined = v_combined / norm
-            
+
             results.append(v_combined)
 
         return np.array(results)
@@ -488,9 +551,7 @@ class EmbeddingService:
 
         token_embeddings = model_output.last_hidden_state
         attention_mask = encoded_input["attention_mask"]
-        input_mask_expanded = (
-            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        )
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
 
         sum_embeddings = (token_embeddings * input_mask_expanded).sum(1)
         sum_mask = input_mask_expanded.sum(1).clamp(min=1e-9)

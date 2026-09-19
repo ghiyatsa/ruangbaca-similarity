@@ -2,6 +2,7 @@
 Konfigurasi sistem pencatatan terstruktur (structured logging).
 Menggantikan fungsi keluaran standar untuk memfasilitasi pemformatan dan penyaringan log.
 """
+
 import logging
 import sys
 

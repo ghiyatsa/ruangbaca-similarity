@@ -2,6 +2,7 @@
 Repositori pelacak pekerjaan sinkronisasi massal dalam memori (in-memory job tracker).
 Mengelola status sinkronisasi secara dinamis tanpa ketergantungan pada basis data relasional.
 """
+
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -18,19 +19,17 @@ class JobState(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
+
 _jobs: Dict[str, JobState] = {}
+
 
 class SyncJobRepository:
     """Mock repository yang beroperasi in-memory untuk tracking status bulk job."""
-    
+
     @staticmethod
     async def create(*, job_id: str, payload_json: str, total_received: int) -> JobState:
         job = JobState(
-            id=job_id,
-            status="pending",
-            total_received=total_received,
-            total_processed=0,
-            created_at=datetime.utcnow()
+            id=job_id, status="pending", total_received=total_received, total_processed=0, created_at=datetime.utcnow()
         )
         _jobs[job_id] = job
         job.__dict__["_payload_json"] = payload_json

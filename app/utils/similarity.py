@@ -36,4 +36,3 @@ def calculate_jaccard(text_a: str, text_b: str) -> float:
     if not words_a and not words_b:
         return 0.0
     return len(words_a.intersection(words_b)) / len(words_a.union(words_b))
-

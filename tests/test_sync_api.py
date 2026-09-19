@@ -3,6 +3,7 @@
 Menguji autentikasi, upsert/delete, status job, serta jalur sukses & gagal
 dari pemrosesan job latar belakang tanpa menyentuh ChromaDB maupun model.
 """
+
 import asyncio
 from types import SimpleNamespace
 
@@ -84,9 +85,7 @@ class TestJobStatus:
         assert response.status_code == 404
 
     def test_mengembalikan_status_job(self, client, auth_headers):
-        asyncio.run(
-            SyncJobRepository.create(job_id="job-1", payload_json="{}", total_received=3)
-        )
+        asyncio.run(SyncJobRepository.create(job_id="job-1", payload_json="{}", total_received=3))
 
         response = client.get("/api/v1/sync/jobs/job-1", headers=auth_headers)
 
@@ -144,10 +143,7 @@ class TestBulkJobPipeline:
         from app.api.sync import _serialize_payload
         from app.schemas.document import SyncItem
 
-        items = [
-            SyncItem(document_id=f"skripsi_{i}", judul=f"judul dokumen nomor {i}")
-            for i in ids
-        ]
+        items = [SyncItem(document_id=f"skripsi_{i}", judul=f"judul dokumen nomor {i}") for i in ids]
         return _serialize_payload(items, reset)
 
     def test_menandai_selesai_dan_menyimpan_batch(self, fake_embedding, fake_store):
@@ -201,9 +197,7 @@ class TestBulkJobPipeline:
 
     def test_job_tidak_ditemukan_tidak_menyebabkan_error(self, fake_embedding, fake_store):
         # Tidak melempar exception walau job tidak ada.
-        asyncio.run(
-            _run_bulk_upsert_job(self._app_state(fake_embedding, fake_store), "tidak-ada")
-        )
+        asyncio.run(_run_bulk_upsert_job(self._app_state(fake_embedding, fake_store), "tidak-ada"))
         assert fake_store.upserts == []
 
 

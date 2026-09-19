@@ -14,6 +14,7 @@ Contoh penggunaan:
   python scripts/evaluate.py --token <SYNC_SECRET> --threshold 0.65 --output results/eval.json
   python scripts/evaluate.py --token <SYNC_SECRET> --dataset data/eval_dataset.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -152,11 +153,7 @@ BUILTIN_DATASET = [
 def precision_recall_f1(tp: int, fp: int, fn: int):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     return round(precision, 4), round(recall, 4), round(f1, 4)
 
 
@@ -180,7 +177,10 @@ def evaluate_at_threshold(predictions: list, threshold: float) -> dict:
 
     return {
         "threshold": round(threshold, 2),
-        "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
         "precision": precision,
         "recall": recall,
         "f1": f1,
@@ -245,16 +245,18 @@ def run_evaluation(
             f"label={true_label} pred={pred_label} | {judul_a[:45]}..."
         )
 
-        predictions.append({
-            "no": i,
-            "judul_a": judul_a,
-            "judul_b": judul_b,
-            "label": true_label,
-            "score": score,
-            "semantic_score": semantic,
-            "lexical_score": lexical,
-            "level": level,
-        })
+        predictions.append(
+            {
+                "no": i,
+                "judul_a": judul_a,
+                "judul_b": judul_b,
+                "label": true_label,
+                "score": score,
+                "semantic_score": semantic,
+                "lexical_score": lexical,
+                "level": level,
+            }
+        )
         time.sleep(delay)
 
     thresholds = [round(t / 100, 2) for t in range(40, 96, 5)]
@@ -272,10 +274,11 @@ def run_evaluation(
     print(f"  Recall           : {target_metrics['recall']:.4f}")
     print(f"  F1-Score         : {target_metrics['f1']:.4f}")
     print(f"  Accuracy         : {target_metrics['accuracy']:.4f}")
-    print(f"  TP={target_metrics['tp']} FP={target_metrics['fp']} "
-          f"FN={target_metrics['fn']} TN={target_metrics['tn']}")
-    print(f"\n  Threshold terbaik (F1): {best['threshold']} "
-          f"-> F1={best['f1']:.4f} Precision={best['precision']:.4f} Recall={best['recall']:.4f}")
+    print(f"  TP={target_metrics['tp']} FP={target_metrics['fp']} FN={target_metrics['fn']} TN={target_metrics['tn']}")
+    print(
+        f"\n  Threshold terbaik (F1): {best['threshold']} "
+        f"-> F1={best['f1']:.4f} Precision={best['precision']:.4f} Recall={best['recall']:.4f}"
+    )
     print(f"{'=' * 55}\n")
 
     if output_path is None:
@@ -308,8 +311,7 @@ def run_evaluation(
     csv_path = output_path.replace(".json", "_threshold_sweep.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["threshold", "tp", "fp", "fn", "tn",
-                           "precision", "recall", "f1", "accuracy"]
+            f, fieldnames=["threshold", "tp", "fp", "fn", "tn", "precision", "recall", "f1", "accuracy"]
         )
         writer.writeheader()
         writer.writerows(metrics_by_threshold)
@@ -318,8 +320,7 @@ def run_evaluation(
     pred_csv = output_path.replace(".json", "_predictions.csv")
     with open(pred_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["no", "judul_a", "judul_b", "label", "score",
-                           "semantic_score", "lexical_score", "level"]
+            f, fieldnames=["no", "judul_a", "judul_b", "label", "score", "semantic_score", "lexical_score", "level"]
         )
         writer.writeheader()
         writer.writerows(predictions)
@@ -327,21 +328,13 @@ def run_evaluation(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Evaluasi akurasi model semantic similarity RuangBaca"
-    )
-    parser.add_argument("--url", default="http://localhost:8181",
-                        help="Base URL API (default: http://localhost:8181)")
-    parser.add_argument("--token", required=True,
-                        help="SYNC_SECRET dari .env")
-    parser.add_argument("--threshold", type=float, default=0.65,
-                        help="Threshold similarity (default: 0.65)")
-    parser.add_argument("--dataset", default=None,
-                        help="Path file JSON dataset kustom (opsional)")
-    parser.add_argument("--output", default=None,
-                        help="Path output JSON (default: results/eval_<timestamp>.json)")
-    parser.add_argument("--delay", type=float, default=0.2,
-                        help="Jeda antar request detik (default: 0.2)")
+    parser = argparse.ArgumentParser(description="Evaluasi akurasi model semantic similarity RuangBaca")
+    parser.add_argument("--url", default="http://localhost:8181", help="Base URL API (default: http://localhost:8181)")
+    parser.add_argument("--token", required=True, help="SYNC_SECRET dari .env")
+    parser.add_argument("--threshold", type=float, default=0.65, help="Threshold similarity (default: 0.65)")
+    parser.add_argument("--dataset", default=None, help="Path file JSON dataset kustom (opsional)")
+    parser.add_argument("--output", default=None, help="Path output JSON (default: results/eval_<timestamp>.json)")
+    parser.add_argument("--delay", type=float, default=0.2, help="Jeda antar request detik (default: 0.2)")
     args = parser.parse_args()
 
     if args.dataset:

@@ -5,6 +5,7 @@ menggunakan `loop.run_in_executor` agar tidak memblokir event loop utama FastAPI
 Menyediakan fitur untuk penambahan (upsert), pencarian semantik (search), penghapusan (delete),
 serta penghitungan dokumen yang terindeks.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +40,6 @@ class VectorStore:
             self.collection.count(),
         )
 
-
     async def _run(self, fn, *args, **kwargs):
         """
         Jalankan fungsi synchronous ChromaDB di thread-pool executor
@@ -47,7 +47,6 @@ class VectorStore:
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(fn, *args, **kwargs))
-
 
     async def upsert(
         self,
@@ -64,10 +63,7 @@ class VectorStore:
         }
         if document is not None:
             kwargs["documents"] = [document]
-        await self._run(
-            self.collection.upsert,
-            **kwargs
-        )
+        await self._run(self.collection.upsert, **kwargs)
 
     async def upsert_batch(
         self,
@@ -84,11 +80,7 @@ class VectorStore:
         }
         if documents is not None:
             kwargs["documents"] = documents
-        await self._run(
-            self.collection.upsert,
-            **kwargs
-        )
-
+        await self._run(self.collection.upsert, **kwargs)
 
     async def search(
         self,
@@ -115,33 +107,33 @@ class VectorStore:
         if document_type:
             query_params["where"] = {"document_type": document_type}
 
-        results = await self._run(
-            self.collection.query,
-            **query_params
-        )
+        results = await self._run(self.collection.query, **query_params)
 
         output: List[dict] = []
         for i, doc_id in enumerate(results["ids"][0]):
             if exclude_id and doc_id == str(exclude_id):
                 continue
 
-            distance   = results["distances"][0][i]
+            distance = results["distances"][0][i]
             similarity = round(1.0 - distance, 4)
-            metadata   = results["metadatas"][0][i]
-            document   = results["documents"][0][i] if results.get("documents") and i < len(results["documents"][0]) else ""
+            metadata = results["metadatas"][0][i]
+            document = (
+                results["documents"][0][i] if results.get("documents") and i < len(results["documents"][0]) else ""
+            )
 
-            output.append({
-                "id": doc_id,
-                "similarity_score": similarity,
-                "document": document,
-                **metadata,
-            })
+            output.append(
+                {
+                    "id": doc_id,
+                    "similarity_score": similarity,
+                    "document": document,
+                    **metadata,
+                }
+            )
 
             if len(output) >= top_k:
                 break
 
         return output
-
 
     async def indexed_ids(self, limit: int = 500, offset: int = 0) -> List[str]:
         """Ambil daftar ID dokumen yang saat ini tersimpan di vector store."""
@@ -166,7 +158,6 @@ class VectorStore:
         )
         logger.info("VectorStore direset — collection '%s' kosong.", settings.COLLECTION_NAME)
 
-
     async def count(self) -> int:
         """Jumlah embedding yang tersimpan."""
         return await self._run(self.collection.count)
@@ -176,20 +167,16 @@ class VectorStore:
         count = await self.count()
         if count == 0:
             return []
-        
-        results = await self._run(
-            self.collection.get,
-            limit=50000,
-            include=["documents", "metadatas"]
-        )
-        
+
+        results = await self._run(self.collection.get, limit=50000, include=["documents", "metadatas"])
+
         titles = []
         if results.get("documents"):
             titles = [doc for doc in results["documents"] if doc]
-        
+
         if not titles and results.get("metadatas"):
             for meta in results["metadatas"]:
                 if meta and "judul" in meta:
                     titles.append(meta["judul"])
-                    
+
         return titles

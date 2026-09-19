@@ -5,6 +5,7 @@ Mencakup model untuk:
 - Response status sinkronisasi (SyncResponse, BulkSyncResponse, BulkSyncJobStatusResponse).
 - Parameter deteksi kemiripan (SimilarityCheckRequest) dan hasilnya (SimilarResult, SimilarityCheckResponse).
 """
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 

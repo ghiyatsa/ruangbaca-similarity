@@ -7,6 +7,7 @@ Menguji:
   - build_index_text()  : penggabungan bagian teks untuk indeks
   - build_query_text()  : normalisasi teks query
 """
+
 import pytest
 
 from app.services.embedding_service import EmbeddingService
@@ -125,9 +126,7 @@ class TestBuildIndexText:
         assert " | " in result
 
     def test_judul_abstrak_kata_kunci(self):
-        result = EmbeddingService.build_index_text(
-            "Judul", abstrak="Abstrak", kata_kunci="nlp, knn"
-        )
+        result = EmbeddingService.build_index_text("Judul", abstrak="Abstrak", kata_kunci="nlp, knn")
         parts = result.split(" | ")
         assert len(parts) == 3
         assert parts[0] == "Judul"
@@ -138,6 +137,7 @@ class TestBuildIndexText:
         abstrak_panjang = "x" * 1000
         result = EmbeddingService.build_index_text("Judul", abstrak=abstrak_panjang)
         from app.core.config import settings
+
         abstrak_part = result.split(" | ")[1]
         assert len(abstrak_part) <= settings.ABSTRAK_MAX_CHARS
 

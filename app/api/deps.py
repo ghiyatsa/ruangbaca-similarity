@@ -2,6 +2,7 @@
 Komponen dependensi bersama (shared dependencies) FastAPI.
 Seluruh dependensi modular dipusatkan di sini untuk mempermudah pemeliharaan kode.
 """
+
 import secrets
 
 from fastapi import Header, HTTPException, Security
@@ -24,9 +25,7 @@ async def verify_sync_token(
 
     Token harus cocok dengan SYNC_SECRET di .env.
     """
-    if x_similarity_api_secret and secrets.compare_digest(
-        x_similarity_api_secret, settings.SYNC_SECRET
-    ):
+    if x_similarity_api_secret and secrets.compare_digest(x_similarity_api_secret, settings.SYNC_SECRET):
         return
 
     if (

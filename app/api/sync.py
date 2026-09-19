@@ -6,6 +6,7 @@ Menyediakan endpoint untuk:
 - Penghapusan dokumen dari vector store (/delete).
 Mendukung kelangsungan tugas sinkronisasi yang belum selesai setelah restart.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -56,10 +57,7 @@ def _deserialize_payload(payload_json: str) -> tuple[List[SyncItem], bool]:
     if isinstance(payload, list):
         return [SyncItem.model_validate(item) for item in payload], False
 
-    return [
-        SyncItem.model_validate(item)
-        for item in payload.get("data", [])
-    ], bool(payload.get("reset_index", False))
+    return [SyncItem.model_validate(item) for item in payload.get("data", [])], bool(payload.get("reset_index", False))
 
 
 _bulk_sync_lock = asyncio.Lock()
@@ -100,8 +98,7 @@ def _verify_indexed_total(reset_index: bool, expected_total: int, total_indexed:
     if reset_index:
         if total_indexed != expected_total:
             raise RuntimeError(
-                "Jumlah vector hasil reindex tidak konsisten "
-                f"(expected={expected_total}, vector={total_indexed})."
+                f"Jumlah vector hasil reindex tidak konsisten (expected={expected_total}, vector={total_indexed})."
             )
     elif total_indexed < expected_total:
         raise RuntimeError(

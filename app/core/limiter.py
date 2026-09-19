@@ -3,6 +3,7 @@ Modul pembatasan laju permintaan (rate limiting) dan kontrol konkurensi.
 Menyediakan mekanisme pencegahan kelebihan beban kerja memori (Out-Of-Memory)
 dan pembatasan laju lalu lintas HTTP per alamat IP.
 """
+
 import asyncio
 
 from slowapi import Limiter
@@ -21,5 +22,6 @@ def get_inference_semaphore() -> asyncio.Semaphore:
     global _semaphore
     if _semaphore is None:
         from app.core.config import settings
+
         _semaphore = asyncio.Semaphore(settings.INFERENCE_CONCURRENCY)
     return _semaphore

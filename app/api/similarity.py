@@ -5,6 +5,7 @@ Menyediakan endpoint untuk:
 - Perbandingan langsung antara dua judul secara cepat (/compare).
 - Agregasi statistik metadata dokumen yang terindeks (/stats).
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,11 +65,13 @@ async def check_similarity(
         db_title = result.get("document", "")
         cleaned_query = embedding_service.clean_title(body.judul)
         cleaned_db = embedding_service.clean_title(db_title)
-        
+
         jaccard_score = calculate_jaccard(cleaned_query, cleaned_db)
-            
+
         semantic_score = result["similarity_score"]
-        hybrid_score = (settings.HYBRID_SEMANTIC_WEIGHT * semantic_score) + (settings.HYBRID_LEXICAL_WEIGHT * jaccard_score)
+        hybrid_score = (settings.HYBRID_SEMANTIC_WEIGHT * semantic_score) + (
+            settings.HYBRID_LEXICAL_WEIGHT * jaccard_score
+        )
         hybrid_score = round(hybrid_score, 4)
 
         if hybrid_score < body.threshold:
@@ -156,10 +159,7 @@ async def compare_two(
         "similarity_score": score_hybrid,
         "similarity_persen": format_persen(score_hybrid),
         "level": get_similarity_level(score_hybrid),
-        "detail": {
-            "semantic_score": round(score_semantic, 4),
-            "lexical_score": round(jaccard_score, 4)
-        }
+        "detail": {"semantic_score": round(score_semantic, 4), "lexical_score": round(jaccard_score, 4)},
     }
 
 
@@ -170,7 +170,7 @@ async def compare_two(
 )
 async def get_stats(request: Request) -> dict:
     vector_store = request.app.state.vector_store
-    
+
     total = await vector_store.count()
     if total == 0:
         return {
@@ -178,18 +178,14 @@ async def get_stats(request: Request) -> dict:
             "distribusi_program_studi": {},
             "distribusi_tahun": {},
         }
-        
-    results = await vector_store._run(
-        vector_store.collection.get,
-        limit=10000,
-        include=["metadatas"]
-    )
-    
+
+    results = await vector_store._run(vector_store.collection.get, limit=10000, include=["metadatas"])
+
     metadatas = results.get("metadatas", [])
-    
+
     prodi_list = []
     tahun_list = []
-    
+
     for meta in metadatas:
         if not meta:
             continue
@@ -198,10 +194,9 @@ async def get_stats(request: Request) -> dict:
         prodi_list.append(prodi)
         if tahun and tahun > 0:
             tahun_list.append(str(tahun))
-            
+
     return {
         "total_indexed": total,
         "distribusi_program_studi": dict(Counter(prodi_list)),
         "distribusi_tahun": dict(Counter(tahun_list)),
     }
-

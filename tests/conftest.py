@@ -6,6 +6,7 @@ dependency auth yang sama seperti main.py) namun dengan embedding service dan
 vector store palsu, sehingga test tidak memuat model ONNX/Transformer maupun
 menyentuh ChromaDB di disk.
 """
+
 import os
 import sys
 

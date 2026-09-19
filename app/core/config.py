@@ -3,6 +3,7 @@ Manajemen konfigurasi aplikasi menggunakan pustaka pydantic-settings.
 Seluruh nilai konfigurasi dimuat secara otomatis dari variabel lingkungan atau berkas .env
 dengan validasi tipe data yang ketat pada saat aplikasi dijalankan.
 """
+
 from typing import List
 
 from pydantic import Field, field_validator
@@ -49,10 +50,7 @@ class Settings(BaseSettings):
     @classmethod
     def secret_must_not_be_default(cls, v: str) -> str:
         if v.lower() in {"changeme-secret-token", "changeme", "secret", ""}:
-            raise ValueError(
-                "SYNC_SECRET harus diganti dari nilai default! "
-                "Gunakan: openssl rand -hex 32"
-            )
+            raise ValueError("SYNC_SECRET harus diganti dari nilai default! Gunakan: openssl rand -hex 32")
         return v
 
     INFERENCE_CONCURRENCY: int = Field(default=4, ge=1, le=32)
