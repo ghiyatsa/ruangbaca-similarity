@@ -34,6 +34,11 @@ jobs:
       - name: Lint with Ruff
         run: python -m ruff check .
 
+      # Gerbang format: tanpa ini, berkas yang belum terformat (dan BOM yang
+      # membuat ruff panik) bisa lolos ke main tanpa terdeteksi.
+      - name: Check formatting with Ruff
+        run: python -m ruff format --check .
+
       - name: Run tests
         env:
           SYNC_SECRET: "test_sync_secret_minimal_length"
